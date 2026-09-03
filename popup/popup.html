@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="color-scheme" content="dark">
+    <title>YT Adjust Settings</title>
+    <link rel="stylesheet" href="popup.css">
+    <style>
+        /* Immediate zero-delay paint styles */
+        html, body {
+            width: 290px;
+            max-height: 580px;
+            background-color: #0e0e10;
+            color: #f2f2f2;
+            margin: 0;
+            padding: 0;
+            overflow-x: hidden;
+            overflow-y: auto;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            color-scheme: dark;
+        }
+        select, option {
+            color-scheme: dark;
+        }
+    </style>
+</head>
+<body>
+    <header class="header">
+        <div class="logo-group">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" class="logo-icon"><path d="M4.93 19.07A10 10 0 1 1 19.07 19.07"/><path d="M12 12l4.5-4.5"/><circle cx="12" cy="12" r="2" fill="currentColor"/></svg>
+            <h1>YT Adjust</h1>
+        </div>
+        <span class="version">v2.3.0</span>
+    </header>
+
+    <main class="content">
+        <!-- 1. Quality -->
+        <section class="group">
+            <div class="setting-row">
+                <span class="setting-label">Quality</span>
+                <div class="inline-controls" id="qualitySelectorRow">
+                    <select id="qualitySelect" class="custom-select">
+                        <option value="highres">4K</option>
+                        <option value="hd1440">1440p</option>
+                        <option value="hd1080" selected>1080p</option>
+                        <option value="hd720">720p</option>
+                        <option value="large">480p</option>
+                        <option value="auto">Auto</option>
+                    </select>
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="qualityEnabled" checked>
+                        <span class="slider"></span>
+                    </label>
+                </div>
+            </div>
+        </section>
+
+        <!-- 2. SponsorBlock -->
+        <section class="group">
+            <div class="setting-row">
+                <span class="setting-label">SponsorBlock</span>
+                <label class="toggle-switch">
+                    <input type="checkbox" id="sponsorblockEnabled" checked>
+                    <span class="slider"></span>
+                </label>
+            </div>
+            
+            <div class="sub-settings" id="sponsorblockSettings">
+                <div class="setting-subrow">
+                    <span class="sub-label">Show skip toast</span>
+                    <label class="toggle-switch mini">
+                        <input type="checkbox" id="sponsorblockNotify" checked>
+                        <span class="slider"></span>
+                    </label>
+                </div>
+                <div class="chips-grid">
+                    <label class="chip"><input type="checkbox" value="sponsor" class="category-cb" checked><span>Sponsor</span></label>
+                    <label class="chip"><input type="checkbox" value="selfpromo" class="category-cb" checked><span>Promo</span></label>
+                    <label class="chip"><input type="checkbox" value="interaction" class="category-cb" checked><span>Interaction</span></label>
+                    <label class="chip"><input type="checkbox" value="intro" class="category-cb"><span>Intro</span></label>
+                    <label class="chip"><input type="checkbox" value="outro" class="category-cb"><span>Outro</span></label>
+                    <label class="chip"><input type="checkbox" value="preview" class="category-cb"><span>Preview</span></label>
+                    <label class="chip"><input type="checkbox" value="filler" class="category-cb"><span>Filler</span></label>
+                </div>
+            </div>
+        </section>
+
+        <!-- 3. Volume Gestures -->
+        <section class="group">
+            <div class="setting-row">
+                <span class="setting-label">Volume Gesture</span>
+                <label class="toggle-switch">
+                    <input type="checkbox" id="volumeGestureEnabled" checked>
+                    <span class="slider"></span>
+                </label>
+            </div>
+            <div class="sub-settings" id="volumeSettings">
+                <div class="slider-row">
+                    <span class="sub-label">Step</span>
+                    <input type="range" id="volumeStep" min="1" max="10" step="1" value="5" class="custom-slider">
+                    <span id="volumeStepValue" class="value-display">5%</span>
+                </div>
+            </div>
+        </section>
+
+        <!-- 4. Speed Control -->
+        <section class="group">
+            <div class="setting-row">
+                <span class="setting-label">Speed Control</span>
+                <div class="inline-controls" id="speedSelectorRow">
+                    <select id="speedStep" class="custom-select">
+                        <option value="0.1">0.1x</option>
+                        <option value="0.25" selected>0.25x</option>
+                        <option value="0.5">0.5x</option>
+                    </select>
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="speedControlEnabled" checked>
+                        <span class="slider"></span>
+                    </label>
+                </div>
+            </div>
+        </section>
+
+        <!-- 5. Boost & Mini Player -->
+        <section class="group">
+            <div class="setting-row">
+                <span class="setting-label">Volume Boost <small>(150%)</small></span>
+                <label class="toggle-switch">
+                    <input type="checkbox" id="volumeBoostEnabled" checked>
+                    <span class="slider"></span>
+                </label>
+            </div>
+        </section>
+
+        <section class="group">
+            <div class="setting-row">
+                <span class="setting-label">Scroll Mini-Player</span>
+                <label class="toggle-switch">
+                    <input type="checkbox" id="miniPlayerEnabled" checked>
+                    <span class="slider"></span>
+                </label>
+            </div>
+        </section>
+
+        <!-- 7. Picture-in-Picture -->
+        <section class="group">
+            <div class="setting-row">
+                <span class="setting-label">Picture-in-Picture <small>(Alt+P)</small></span>
+                <label class="toggle-switch">
+                    <input type="checkbox" id="pipEnabled" checked>
+                    <span class="slider"></span>
+                </label>
+            </div>
+            <div class="sub-settings" id="pipSettings">
+                <div class="setting-subrow">
+                    <span class="sub-label">Auto-PiP on tab switch</span>
+                    <label class="toggle-switch mini">
+                        <input type="checkbox" id="pipAutoOnTabSwitch">
+                        <span class="slider"></span>
+                    </label>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <footer class="footer">
+        <div class="brand">Sheikh Technology LLC</div>
+        <div class="attribution">SponsorBlock data by sponsor.ajay.app</div>
+    </footer>
+
+    <script src="popup.js"></script>
+</body>
+</html>

@@ -1,0 +1,38 @@
+{
+  "manifest_version": 3,
+  "name": "YT Adjust",
+  "version": "2.3.0",
+  "description": "Lightweight YouTube enhancer — auto quality, sponsor skip, volume gesture, speed control, volume boost, mini-player, and picture-in-picture.",
+  "author": "Sheikh Technology LLC",
+  "permissions": ["storage"],
+  "host_permissions": ["https://*.youtube.com/*", "https://sponsor.ajay.app/*"],
+  "action": {
+    "default_popup": "popup/popup.html",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://*.youtube.com/*"],
+      "js": ["content/isolated.js"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": ["https://*.youtube.com/*"],
+      "js": ["content/main.js"],
+      "run_at": "document_idle",
+      "world": "MAIN"
+    }
+  ],
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'self'"
+  }
+}

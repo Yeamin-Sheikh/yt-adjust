@@ -1,0 +1,12 @@
+﻿# Dependencies
+node_modules/
+
+# Agent scratchpad and logs
+.agents/
+
+# System and OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
