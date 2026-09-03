@@ -1,0 +1,226 @@
+﻿<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 380" width="100%" height="auto">
+  <defs>
+    <!-- Background gradients -->
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0b0d13" />
+      <stop offset="50%" stop-color="#0e1017" />
+      <stop offset="100%" stop-color="#141722" />
+    </linearGradient>
+
+    <radialGradient id="redGlow" cx="20%" cy="40%" r="50%">
+      <stop offset="0%" stop-color="#ff0033" stop-opacity="0.18" />
+      <stop offset="60%" stop-color="#ff0033" stop-opacity="0.03" />
+      <stop offset="100%" stop-color="#000000" stop-opacity="0" />
+    </radialGradient>
+
+    <radialGradient id="blueGlow" cx="85%" cy="30%" r="45%">
+      <stop offset="0%" stop-color="#3b82f6" stop-opacity="0.15" />
+      <stop offset="70%" stop-color="#3b82f6" stop-opacity="0.02" />
+      <stop offset="100%" stop-color="#000000" stop-opacity="0" />
+    </radialGradient>
+
+    <linearGradient id="logoGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#ff334b" />
+      <stop offset="100%" stop-color="#d90429" />
+    </linearGradient>
+
+    <linearGradient id="textGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#ffffff" />
+      <stop offset="100%" stop-color="#e2e8f0" />
+    </linearGradient>
+
+    <linearGradient id="cardGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#1a1e2b" stop-opacity="0.9" />
+      <stop offset="100%" stop-color="#0e111a" stop-opacity="0.9" />
+    </linearGradient>
+
+    <!-- Drop Shadows -->
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="8" stdDeviation="16" flood-color="#000000" flood-opacity="0.5" />
+    </filter>
+  </defs>
+
+  <!-- Background Base -->
+  <rect width="1200" height="380" rx="16" fill="url(#bgGrad)" />
+  <rect width="1200" height="380" rx="16" fill="url(#redGlow)" />
+  <rect width="1200" height="380" rx="16" fill="url(#blueGlow)" />
+
+  <!-- Subtle Border -->
+  <rect width="1198" height="378" x="1" y="1" rx="15" fill="none" stroke="#ffffff" stroke-opacity="0.08" stroke-width="1.5" />
+
+  <!-- Subtle Grid Lines -->
+  <g stroke="#ffffff" stroke-opacity="0.025" stroke-width="1">
+    <line x1="100" y1="0" x2="100" y2="380" />
+    <line x1="250" y1="0" x2="250" y2="380" />
+    <line x1="400" y1="0" x2="400" y2="380" />
+    <line x1="550" y1="0" x2="550" y2="380" />
+    <line x1="700" y1="0" x2="700" y2="380" />
+    <line x1="850" y1="0" x2="850" y2="380" />
+    <line x1="1000" y1="0" x2="1000" y2="380" />
+    <line x1="0" y1="100" x2="1200" y2="100" />
+    <line x1="0" y1="200" x2="1200" y2="200" />
+    <line x1="0" y1="300" x2="1200" y2="300" />
+  </g>
+
+  <!-- ==================== LEFT COLUMN: BRANDING ==================== -->
+  <g transform="translate(60, 55)">
+    <!-- App Logo Icon -->
+    <rect width="72" height="72" rx="20" fill="url(#logoGrad)" filter="url(#shadow)" />
+    <!-- Inner icon: Speedometer arc & needle -->
+    <path d="M22 48 A20 20 0 1 1 50 48" fill="none" stroke="#ffffff" stroke-width="4.5" stroke-linecap="round" />
+    <line x1="36" y1="36" x2="46" y2="26" stroke="#ffffff" stroke-width="4.5" stroke-linecap="round" />
+    <circle cx="36" cy="36" r="4.5" fill="#ffffff" />
+
+    <!-- Title & Tagline -->
+    <text x="92" y="44" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" font-size="38" font-weight="800" fill="url(#textGrad)" letter-spacing="-0.5">YT Adjust</text>
+    <rect x="268" y="18" width="58" height="24" rx="12" fill="#ff0033" fill-opacity="0.2" stroke="#ff0033" stroke-opacity="0.4" stroke-width="1" />
+    <text x="297" y="34" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="11" font-weight="700" fill="#ff4d6d" text-anchor="middle">v2.3.0</text>
+
+    <text x="94" y="68" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="15" font-weight="400" fill="#94a3b8">The lightweight, privacy-focused YouTube enhancer for Chromium</text>
+
+    <!-- Feature Pills -->
+    <g transform="translate(0, 110)">
+      <!-- Row 1 -->
+      <g transform="translate(0, 0)">
+        <rect width="118" height="32" rx="16" fill="#1e2433" stroke="#334155" stroke-width="1" />
+        <circle cx="16" cy="16" r="4" fill="#38bdf8" />
+        <text x="28" y="21" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="12" font-weight="600" fill="#e2e8f0">Auto Quality</text>
+      </g>
+
+      <g transform="translate(128, 0)">
+        <rect width="128" height="32" rx="16" fill="#1e2433" stroke="#334155" stroke-width="1" />
+        <circle cx="16" cy="16" r="4" fill="#10b981" />
+        <text x="28" y="21" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="12" font-weight="600" fill="#e2e8f0">SponsorBlock</text>
+      </g>
+
+      <g transform="translate(266, 0)">
+        <rect width="138" height="32" rx="16" fill="#1e2433" stroke="#334155" stroke-width="1" />
+        <circle cx="16" cy="16" r="4" fill="#f59e0b" />
+        <text x="28" y="21" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="12" font-weight="600" fill="#e2e8f0">Volume Gesture</text>
+      </g>
+
+      <g transform="translate(414, 0)">
+        <rect width="124" height="32" rx="16" fill="#1e2433" stroke="#334155" stroke-width="1" />
+        <circle cx="16" cy="16" r="4" fill="#ec4899" />
+        <text x="28" y="21" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="12" font-weight="600" fill="#e2e8f0">Speed 0.25-4x</text>
+      </g>
+
+      <!-- Row 2 -->
+      <g transform="translate(0, 42)">
+        <rect width="132" height="32" rx="16" fill="#1e2433" stroke="#334155" stroke-width="1" />
+        <circle cx="16" cy="16" r="4" fill="#e11d48" />
+        <text x="28" y="21" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="12" font-weight="600" fill="#e2e8f0">150% Boost ((⚡))</text>
+      </g>
+
+      <g transform="translate(142, 42)">
+        <rect width="136" height="32" rx="16" fill="#1e2433" stroke="#334155" stroke-width="1" />
+        <circle cx="16" cy="16" r="4" fill="#8b5cf6" />
+        <text x="28" y="21" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="12" font-weight="600" fill="#e2e8f0">Corner Mini-Player</text>
+      </g>
+
+      <g transform="translate(288, 42)">
+        <rect width="128" height="32" rx="16" fill="#1e2433" stroke="#334155" stroke-width="1" />
+        <circle cx="16" cy="16" r="4" fill="#06b6d4" />
+        <text x="28" y="21" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="12" font-weight="600" fill="#e2e8f0">Auto-PiP (Alt+P)</text>
+      </g>
+    </g>
+
+    <!-- Sub-bullet highlights -->
+    <g transform="translate(0, 205)" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="13" fill="#64748b">
+      <text x="0" y="0">✓ Zero telemetry</text>
+      <text x="130" y="0">✓ Manifest V3</text>
+      <text x="240" y="0">✓ No account required</text>
+      <text x="390" y="0">✓ CC BY-SA 4.0 SponsorBlock data</text>
+    </g>
+  </g>
+
+  <!-- ==================== RIGHT COLUMN: PLAYER UI MOCKUP ==================== -->
+  <g transform="translate(640, 50)" filter="url(#shadow)">
+    <!-- Video Player Frame -->
+    <rect width="500" height="280" rx="12" fill="url(#cardGrad)" stroke="#334155" stroke-width="1.5" />
+
+    <!-- Video Placeholder Screen Graphic -->
+    <rect x="2" y="2" width="496" height="216" rx="10" fill="#0c0e14" />
+
+    <!-- Subtle glow on player screen -->
+    <circle cx="250" cy="108" r="70" fill="#ff0033" fill-opacity="0.08" />
+
+    <!-- Mini-player badge in top right of screen -->
+    <rect x="360" y="16" width="120" height="26" rx="6" fill="#000000" fill-opacity="0.6" stroke="#ffffff" stroke-opacity="0.1" stroke-width="1" />
+    <text x="420" y="33" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="11" font-weight="600" fill="#94a3b8" text-anchor="middle">480×270 Mini Mode</text>
+
+    <!-- Big Center Play/Boost Graphic -->
+    <g transform="translate(250, 108)" text-anchor="middle">
+      <circle cx="0" cy="0" r="32" fill="#ff0033" fill-opacity="0.15" stroke="#ff0033" stroke-opacity="0.3" stroke-width="1.5" />
+      <path d="M-12 8 A14 14 0 1 1 12 8" fill="none" stroke="#ff4d6d" stroke-width="2.5" stroke-linecap="round" />
+      <line x1="0" y1="0" x2="6" y2="-6" stroke="#ffffff" stroke-width="2.5" stroke-linecap="round" />
+      <circle cx="0" cy="0" r="2.5" fill="#ffffff" />
+    </g>
+
+    <!-- ==================== BOTTOM CONTROLS BAR ==================== -->
+    <g transform="translate(0, 218)">
+      <!-- Seekbar Track -->
+      <rect x="14" y="2" width="472" height="4" rx="2" fill="#ffffff" fill-opacity="0.2" />
+      <!-- Progress (red) -->
+      <rect x="14" y="2" width="140" height="4" rx="2" fill="#ff0033" />
+      <!-- Scrubber knob -->
+      <circle cx="154" cy="4" r="5.5" fill="#ff0033" />
+
+      <!-- SponsorBlock White Segment Marker 1 -->
+      <rect x="220" y="0" width="42" height="8" rx="1" fill="#ffffff" fill-opacity="0.75" />
+      <!-- SponsorBlock White Segment Marker 2 -->
+      <rect x="340" y="0" width="30" height="8" rx="1" fill="#ffffff" fill-opacity="0.75" />
+
+      <!-- Controls Row -->
+      <g transform="translate(14, 18)">
+        <!-- Play Icon -->
+        <path d="M4 6 L12 11 L4 16 Z" fill="#ffffff" />
+
+        <!-- Next Icon -->
+        <path d="M18 7 L24 11 L18 15 Z" fill="#ffffff" />
+        <line x1="25" y1="7" x2="25" y2="15" stroke="#ffffff" stroke-width="1.5" />
+
+        <!-- Volume Icon -->
+        <path d="M33 9 L36 9 L40 6 L40 16 L36 13 L33 13 Z" fill="#ffffff" />
+        <path d="M42 8 C44 9.5 44 12.5 42 14" fill="none" stroke="#ffffff" stroke-width="1.5" stroke-linecap="round" />
+
+        <!-- [INJECTED] Boost Button ((⚡)) -->
+        <g transform="translate(48, 1)">
+          <rect width="28" height="20" rx="10" fill="#ff0033" fill-opacity="0.2" stroke="#ff0033" stroke-opacity="0.5" stroke-width="1" />
+          <text x="14" y="14" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="10" font-weight="700" fill="#ff6b81" text-anchor="middle">((⚡))</text>
+        </g>
+
+        <!-- Time Display Pill -->
+        <g transform="translate(84, 1)">
+          <rect width="78" height="20" rx="10" fill="#262b3d" />
+          <text x="39" y="14" font-family="'YouTube Noto', Roboto, sans-serif" font-size="10" font-weight="500" fill="#e2e8f0" text-anchor="middle">1:44 / 26:28</text>
+        </g>
+
+        <!-- Chapter Pill -->
+        <g transform="translate(168, 1)">
+          <rect width="60" height="20" rx="10" fill="#262b3d" />
+          <text x="30" y="14" font-family="'YouTube Noto', Roboto, sans-serif" font-size="10" font-weight="500" fill="#94a3b8" text-anchor="middle">Intro ›</text>
+        </g>
+
+        <!-- RIGHT CONTROLS -->
+        <circle cx="330" cy="11" r="5" fill="#475569" />
+        <!-- CC -->
+        <rect x="345" y="5" width="16" height="12" rx="2" fill="none" stroke="#ffffff" stroke-width="1.5" />
+        <text x="353" y="14" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="8" font-weight="700" fill="#ffffff" text-anchor="middle">CC</text>
+
+        <!-- [INJECTED] Speed Button with 14px Badge -->
+        <g transform="translate(370, 0)">
+          <path d="M4 14 A8 8 0 1 1 14 14" fill="none" stroke="#ffffff" stroke-width="1.5" stroke-linecap="round" />
+          <line x1="9" y1="9" x2="13" y2="5" stroke="#ffffff" stroke-width="1.5" stroke-linecap="round" />
+          <text x="24" y="14" font-family="'YouTube Noto', Roboto, sans-serif" font-size="12" font-weight="600" fill="#ffffff">2x</text>
+        </g>
+
+        <!-- Settings Gear Icon -->
+        <circle cx="420" cy="11" r="5" fill="none" stroke="#ffffff" stroke-width="1.5" />
+
+        <!-- Miniplayer / Fullscreen Icon -->
+        <rect x="442" y="5" width="14" height="11" rx="2" fill="none" stroke="#ffffff" stroke-width="1.5" />
+      </g>
+    </g>
+  </g>
+</svg>
