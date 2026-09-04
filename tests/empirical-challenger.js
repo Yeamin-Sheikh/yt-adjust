@@ -1708,6 +1708,88 @@ async function runTestAsync(name, fn) {
     assert.strictEqual(env.document.pictureInPictureElement, null);
   });
 
+  await runTestAsync("In-flight exit request while triggerAutoPip is pending is queued and executed on resolution", async () => {
+    const env = createDomEnvironment();
+    const ctx = loadMainJsInContext(env, true);
+    const dom = setupPipDom(env);
+    ctx.state.settings.pipAutoOnTabSwitch = true;
+    ctx.setupPictureInPicture();
+    ctx.bindPipVideo(dom.video);
+
+    // Make requestPictureInPicture take some time
+    let resolvePip;
+    dom.video.requestPictureInPicture = () => new Promise((resolve) => {
+      resolvePip = () => {
+        env.document.pictureInPictureElement = dom.video;
+        resolve({});
+      };
+    });
+
+    // 1. Tab switches to hidden -> triggerAutoPip starts (mutex locked)
+    env.document.visibilityState = "hidden";
+    env.document.dispatchEvent({ type: "visibilitychange" });
+    await new Promise((r) => setImmediate(r));
+
+    // 2. User quickly switches back to tab while request is still pending
+    env.document.visibilityState = "visible";
+    env.document.dispatchEvent({ type: "visibilitychange" });
+    await new Promise((r) => setImmediate(r));
+
+    // Exit could not run immediately because mutex was locked, but should be marked pending
+    assert.strictEqual(dom.getPipExited(), 0);
+
+    // 3. Now the browser finally completes requestPictureInPicture
+    resolvePip();
+    await new Promise((r) => setImmediate(r));
+    await new Promise((r) => setTimeout(r, 10));
+
+    // The queued pending exit must have executed automatically in finally block
+    assert.strictEqual(dom.getPipExited(), 1, "Pending exit executed immediately after requestPictureInPicture resolved");
+    assert.strictEqual(ctx.state.pipAutoTriggered, false);
+  });
+
+  await runTestAsync("onEnterPictureInPicture exits auto-PiP immediately if document is already visible", async () => {
+    const env = createDomEnvironment();
+    const ctx = loadMainJsInContext(env, true);
+    const dom = setupPipDom(env);
+    ctx.state.settings.pipAutoOnTabSwitch = true;
+    ctx.setupPictureInPicture();
+    ctx.bindPipVideo(dom.video);
+
+    // Video enters PiP while document is visible
+    env.document.visibilityState = "visible";
+    env.document.pictureInPictureElement = dom.video;
+    dom.video.dispatchEvent({ type: "enterpictureinpicture" });
+    await new Promise((r) => setImmediate(r));
+
+    assert.strictEqual(dom.getPipExited(), 1, "Immediately exited PiP because document is visible");
+    assert.strictEqual(ctx.state.pipAutoTriggered, false);
+  });
+
+  await runTestAsync("startPipWatchdog detects visible tab and triggers exitAutoPip even without visibility/focus events", async () => {
+    const env = createDomEnvironment();
+    const ctx = loadMainJsInContext(env, true);
+    const dom = setupPipDom(env);
+    ctx.state.settings.pipAutoOnTabSwitch = true;
+    ctx.setupPictureInPicture();
+    ctx.bindPipVideo(dom.video);
+
+    // Video is in PiP, document was hidden
+    env.document.visibilityState = "hidden";
+    env.document.pictureInPictureElement = dom.video;
+    ctx.state.pipAutoTriggered = true;
+    ctx.startPipWatchdog();
+
+    // Tab silently becomes visible (no events dispatched by browser shell)
+    env.document.visibilityState = "visible";
+
+    // Wait for watchdog interval (200ms)
+    await new Promise((r) => setTimeout(r, 250));
+
+    assert.strictEqual(dom.getPipExited(), 1, "Watchdog detected visible document and called exitAutoPip");
+    ctx.stopPipWatchdog();
+  });
+
   console.log(`\nStress test suite completed: ${passedTests}/${totalTests} tests passed.`);
   if (passedTests === totalTests) {
     console.log("ALL TESTS PASSED SUCCESSFULLY.");

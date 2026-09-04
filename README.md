@@ -3,7 +3,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/Yeamin-Sheikh/yt-adjust/releases/tag/v2.3.5"><img src="https://img.shields.io/badge/version-2.3.5-FF0000?style=for-the-badge&logo=youtube&logoColor=white" alt="Version 2.3.5"></a>
+  <a href="https://github.com/Yeamin-Sheikh/yt-adjust/releases/tag/v2.3.6"><img src="https://img.shields.io/badge/version-2.3.6-FF0000?style=for-the-badge&logo=youtube&logoColor=white" alt="Version 2.3.6"></a>
   <a href="https://developer.chrome.com/docs/extensions/mv3/intro/"><img src="https://img.shields.io/badge/Manifest-V3-10b981?style=for-the-badge&logo=googlechrome&logoColor=white" alt="Manifest V3"></a>
   <img src="https://img.shields.io/badge/tests-63%20passing-38bdf8?style=for-the-badge&logo=checkmarx&logoColor=white" alt="63 Passing Tests">
   <img src="https://img.shields.io/badge/Chromium-Supported-f59e0b?style=for-the-badge&logo=googlechrome&logoColor=white" alt="Chromium Supported">
@@ -16,8 +16,8 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/Yeamin-Sheikh/yt-adjust/releases/download/v2.3.5/yt-adjust-v2.3.5.zip">
-    <img src="https://img.shields.io/badge/Download_Extension_ZIP-v2.3.5-d90429?style=for-the-badge&logo=zip&logoColor=white" alt="Download ZIP">
+  <a href="https://github.com/Yeamin-Sheikh/yt-adjust/releases/download/v2.3.6/yt-adjust-v2.3.6.zip">
+    <img src="https://img.shields.io/badge/Download_Extension_ZIP-v2.3.6-d90429?style=for-the-badge&logo=zip&logoColor=white" alt="Download ZIP">
   </a>
 </p>
 
