@@ -134,6 +134,18 @@ function cacheElements() {
  */
 function initPopup() {
   cacheElements();
+
+  // Dynamically populate version badge from extension manifest to prevent desync
+  try {
+    const versionEl = document.querySelector(".version");
+    if (versionEl && typeof chrome !== "undefined" && chrome?.runtime?.getManifest) {
+      const manifest = chrome.runtime.getManifest();
+      if (manifest && manifest.version) {
+        versionEl.textContent = `v${manifest.version}`;
+      }
+    }
+  } catch (e) {}
+
   // Hydrate instantaneously from synchronous localStorage cache to prevent opening delay
   try {
     if (typeof localStorage !== "undefined") {
