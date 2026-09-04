@@ -1636,6 +1636,45 @@ async function runTestAsync(name, fn) {
     assert.strictEqual(ctx.state.pipAutoTriggered, false);
   });
 
+  await runTestAsync("Auto-PiP cleanly exits on tab return even after intermediate tab switches", async () => {
+    const env = createDomEnvironment();
+    const ctx = loadMainJsInContext(env, true);
+    const dom = setupPipDom(env);
+    ctx.state.settings.pipAutoOnTabSwitch = true;
+    ctx.setupPictureInPicture();
+    ctx.bindPipVideo(dom.video);
+
+    // 1. User switches from YouTube to Tab 2 (Messenger)
+    env.document.visibilityState = "hidden";
+    env.document.dispatchEvent({ type: "visibilitychange" });
+    await new Promise((r) => setImmediate(r));
+
+    assert.strictEqual(dom.getPipRequested(), 1, "Auto-PiP requested on first tab switch");
+
+    // 2. Real browser dispatches enterpictureinpicture event
+    dom.video.dispatchEvent({ type: "enterpictureinpicture" });
+    await new Promise((r) => setImmediate(r));
+
+    // Flag must remain true so tab-return exit is not skipped!
+    assert.strictEqual(ctx.state.pipAutoTriggered, true, "pipAutoTriggered preserved after enterpictureinpicture");
+    assert.strictEqual(ctx.state.pipManualTriggered, false, "pipManualTriggered remains false for auto-PiP");
+
+    // 3. User switches to Tab 3 (New Tab / Other Tab) - YouTube stays hidden
+    // Simulate window blur or additional intermediate background ticks
+    env.document.dispatchEvent({ type: "blur" });
+    await new Promise((r) => setImmediate(r));
+    assert.strictEqual(ctx.state.pipAutoTriggered, true, "pipAutoTriggered preserved across intermediate tabs");
+
+    // 4. User finally returns to YouTube tab
+    env.document.visibilityState = "visible";
+    env.document.dispatchEvent({ type: "visibilitychange" });
+    await new Promise((r) => setImmediate(r));
+
+    assert.strictEqual(dom.getPipExited(), 1, "Auto-PiP successfully exited on returning to tab");
+    assert.strictEqual(ctx.state.pipAutoTriggered, false, "pipAutoTriggered flag reset after exit");
+    assert.strictEqual(env.document.pictureInPictureElement, null, "pictureInPictureElement cleared");
+  });
+
   console.log(`\nStress test suite completed: ${passedTests}/${totalTests} tests passed.`);
   if (passedTests === totalTests) {
     console.log("ALL TESTS PASSED SUCCESSFULLY.");
