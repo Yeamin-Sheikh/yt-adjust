@@ -2286,6 +2286,13 @@ async function exitAutoPip() {
       state.pipAutoTriggered = false;
       await document.exitPictureInPicture();
       console.log("[YT Adjust] Auto-PiP exited on tab return");
+
+      // YouTube's player has its own internal PiP state tracking. When we exit PiP
+      // programmatically, the browser fires leavepictureinpicture on the video element,
+      // but YouTube's player UI layer may not process it in time. This leaves the
+      // "Playing in picture-in-picture" overlay stuck on screen with a black video area.
+      // We fix this by force-clearing YouTube's PiP overlay after a short delay.
+      setTimeout(() => { forceExitYouTubePipState(); }, 120);
     } catch (err) {
       console.log("[YT Adjust] Auto-PiP exit failed:", err);
     } finally {
@@ -2293,6 +2300,84 @@ async function exitAutoPip() {
     }
   }
   state.pipAutoTriggered = false;
+}
+
+/**
+ * Force-clears YouTube's internal "Playing in picture-in-picture" overlay state.
+ * YouTube's player keeps its own PiP mode tracking separate from the browser's
+ * PiP API. When we programmatically call document.exitPictureInPicture(),
+ * the browser closes the PiP window, but YouTube's player UI may remain stuck
+ * showing the black overlay with "Playing in picture-in-picture" text.
+ *
+ * This function handles the cleanup by:
+ * 1. Removing YouTube's ytp-pip-mode CSS class from the player
+ * 2. Force-hiding any lingering PiP overlay elements
+ * 3. Dispatching a resize event to trigger player re-render
+ * 4. Calling YouTube's setInternalSize() to recalculate video dimensions
+ *
+ * @returns {void}
+ */
+function forceExitYouTubePipState() {
+  // Don't clean up if PiP is actually still active (race condition guard)
+  if (document.pictureInPictureElement) return;
+
+  const moviePlayer = getPlayer();
+  if (!moviePlayer) return;
+
+  // YouTube adds CSS classes like 'ytp-pip-mode' or 'ytp-pip-fifo' to #movie_player
+  // when entering PiP. These control the "Playing in picture-in-picture" overlay.
+  const pipClasses = ["ytp-pip-mode", "ytp-pip-fifo"];
+  let wasStuck = false;
+
+  for (const cls of pipClasses) {
+    if (moviePlayer.classList.contains(cls)) {
+      moviePlayer.classList.remove(cls);
+      wasStuck = true;
+    }
+  }
+
+  // Find and hide YouTube's PiP overlay container (the black screen with text)
+  const pipOverlay = /** @type {HTMLElement | null} */ (
+    moviePlayer.querySelector(".ytp-pip-window")
+  );
+  if (pipOverlay) {
+    pipOverlay.style.display = "none";
+    wasStuck = true;
+  }
+
+  // Also check for a broader pip scrim/backdrop element
+  const pipScrim = /** @type {HTMLElement | null} */ (
+    moviePlayer.querySelector(".ytp-pip-scrim")
+  );
+  if (pipScrim) {
+    pipScrim.style.display = "none";
+    wasStuck = true;
+  }
+
+  if (wasStuck) {
+    console.log("[YT Adjust] Cleared stuck YouTube PiP overlay state");
+  }
+
+  // Force the video element visible and properly sized
+  const video = getVideo();
+  if (video) {
+    video.style.opacity = "1";
+    video.style.visibility = "visible";
+  }
+
+  // Trigger a window resize event so YouTube's player recalculates video dimensions.
+  // This is the same mechanism YouTube uses internally when transitioning between
+  // theater mode, fullscreen, and normal view.
+  try {
+    window.dispatchEvent(new Event("resize"));
+  } catch (e) {}
+
+  // Call YouTube's own setInternalSize() method to force dimension recalculation
+  if (moviePlayer && typeof /** @type {any} */ (moviePlayer).setInternalSize === "function") {
+    try {
+      /** @type {any} */ (moviePlayer).setInternalSize();
+    } catch (e) {}
+  }
 }
 
 /**
@@ -2356,6 +2441,11 @@ function onEnterPictureInPicture(e) {
  */
 function onLeavePictureInPicture(e) {
   state.pipAutoTriggered = false;
+
+  // Safety net: clear YouTube's PiP overlay regardless of how PiP was exited
+  // (user closed the PiP window, Alt+P toggle, auto-PiP tab return, etc.)
+  setTimeout(() => { forceExitYouTubePipState(); }, 150);
+
   if (state.settings.miniPlayerEnabled && location.pathname === "/watch") {
     onMiniPlayerScroll();
   }
