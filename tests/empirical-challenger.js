@@ -391,6 +391,9 @@ function createDomEnvironment(options = {}) {
     removeEventListener(type, listener) {
       documentMock.removeEventListener(type, listener);
     },
+    dispatchEvent(event) {
+      documentMock.dispatchEvent(event);
+    },
     postMessage(data, targetOrigin) {},
     requestAnimationFrame(cb) { return setTimeout(cb, 16); },
     cancelAnimationFrame(id) { clearTimeout(id); },
@@ -1673,6 +1676,36 @@ async function runTestAsync(name, fn) {
     assert.strictEqual(dom.getPipExited(), 1, "Auto-PiP successfully exited on returning to tab");
     assert.strictEqual(ctx.state.pipAutoTriggered, false, "pipAutoTriggered flag reset after exit");
     assert.strictEqual(env.document.pictureInPictureElement, null, "pictureInPictureElement cleared");
+  });
+
+  await runTestAsync("Simultaneous visibilitychange and focus events are serialized by mutex without double exitPictureInPicture calls", async () => {
+    const env = createDomEnvironment();
+    const ctx = loadMainJsInContext(env, true);
+    const dom = setupPipDom(env);
+    ctx.state.settings.pipAutoOnTabSwitch = true;
+    ctx.setupPictureInPicture();
+    ctx.bindPipVideo(dom.video);
+
+    // Enter PiP on tab switch
+    env.document.visibilityState = "hidden";
+    env.document.dispatchEvent({ type: "visibilitychange" });
+    await new Promise((r) => setImmediate(r));
+    dom.video.dispatchEvent({ type: "enterpictureinpicture" });
+    await new Promise((r) => setImmediate(r));
+
+    assert.strictEqual(dom.getPipRequested(), 1);
+    assert.strictEqual(dom.getPipExited(), 0);
+
+    // Fire both visibilitychange (visible) and window focus simultaneously
+    env.document.visibilityState = "visible";
+    env.document.dispatchEvent({ type: "visibilitychange" });
+    env.window.dispatchEvent({ type: "focus" });
+    await new Promise((r) => setImmediate(r));
+
+    // Must execute exit exactly once, without concurrent duplicate exit calls
+    assert.strictEqual(dom.getPipExited(), 1, "exitPictureInPicture called exactly ONCE despite dual concurrent events");
+    assert.strictEqual(ctx.state.pipAutoTriggered, false);
+    assert.strictEqual(env.document.pictureInPictureElement, null);
   });
 
   console.log(`\nStress test suite completed: ${passedTests}/${totalTests} tests passed.`);

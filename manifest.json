@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "YT Adjust",
-  "version": "2.3.4",
+  "version": "2.3.5",
   "description": "Lightweight YouTube enhancer — auto quality, sponsor skip, volume gesture, speed control, volume boost, mini-player, and picture-in-picture.",
   "author": "Sheikh Technology LLC",
   "permissions": ["storage"],

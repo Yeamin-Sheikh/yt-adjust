@@ -3,9 +3,9 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/Yeamin-Sheikh/yt-adjust/releases/tag/v2.3.4"><img src="https://img.shields.io/badge/version-2.3.4-FF0000?style=for-the-badge&logo=youtube&logoColor=white" alt="Version 2.3.4"></a>
+  <a href="https://github.com/Yeamin-Sheikh/yt-adjust/releases/tag/v2.3.5"><img src="https://img.shields.io/badge/version-2.3.5-FF0000?style=for-the-badge&logo=youtube&logoColor=white" alt="Version 2.3.5"></a>
   <a href="https://developer.chrome.com/docs/extensions/mv3/intro/"><img src="https://img.shields.io/badge/Manifest-V3-10b981?style=for-the-badge&logo=googlechrome&logoColor=white" alt="Manifest V3"></a>
-  <img src="https://img.shields.io/badge/tests-61%20passing-38bdf8?style=for-the-badge&logo=checkmarx&logoColor=white" alt="61 Passing Tests">
+  <img src="https://img.shields.io/badge/tests-63%20passing-38bdf8?style=for-the-badge&logo=checkmarx&logoColor=white" alt="63 Passing Tests">
   <img src="https://img.shields.io/badge/Chromium-Supported-f59e0b?style=for-the-badge&logo=googlechrome&logoColor=white" alt="Chromium Supported">
   <img src="https://img.shields.io/badge/license-MIT-8b5cf6?style=for-the-badge" alt="MIT License">
 </p>
@@ -16,16 +16,16 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/Yeamin-Sheikh/yt-adjust/releases/download/v2.3.4/yt-adjust-v2.3.4.zip">
-    <img src="https://img.shields.io/badge/Download_Extension_ZIP-v2.3.4-d90429?style=for-the-badge&logo=zip&logoColor=white" alt="Download ZIP">
+  <a href="https://github.com/Yeamin-Sheikh/yt-adjust/releases/download/v2.3.5/yt-adjust-v2.3.5.zip">
+    <img src="https://img.shields.io/badge/Download_Extension_ZIP-v2.3.5-d90429?style=for-the-badge&logo=zip&logoColor=white" alt="Download ZIP">
   </a>
 </p>
 
 <p align="center">
-  <a href="#features">Features</a> •
-  <a href="#quick-shortcuts">Shortcuts</a> •
-  <a href="#installation">Installation</a> •
-  <a href="#settings-reference">Settings</a> •
+  <a href="#features">Features</a> â€¢
+  <a href="#quick-shortcuts">Shortcuts</a> â€¢
+  <a href="#installation">Installation</a> â€¢
+  <a href="#settings-reference">Settings</a> â€¢
   <a href="#architecture">Architecture</a>
 </p>
 
@@ -63,7 +63,7 @@
 
 ### Option 1: Load pre-built release ZIP (recommended)
 
-1. Download **[yt-adjust-v2.3.4.zip](https://github.com/Yeamin-Sheikh/yt-adjust/releases/download/v2.3.4/yt-adjust-v2.3.4.zip)** from the releases page.
+1. Download **[yt-adjust-v2.3.5.zip](https://github.com/Yeamin-Sheikh/yt-adjust/releases/download/v2.3.5/yt-adjust-v2.3.5.zip)** from the releases page.
 2. Extract the archive into a folder on your computer.
 3. Open your Chromium browser (Chrome, Helium, Brave, Edge, Opera) and navigate to `chrome://extensions` (or `helium://extensions`).
 4. Toggle **Developer mode** in the top-right corner.
@@ -109,28 +109,28 @@ Built strictly on Chrome Manifest V3 using a dual content script architecture co
 
 ```
 +-------------------------------------------------------------+
-¦                       Browser Popup                         ¦
-¦   Settings UI (popup.html / popup.css / popup.js)           ¦
-¦   Persists user preferences via chrome.storage.sync         ¦
+Â¦                       Browser Popup                         Â¦
+Â¦   Settings UI (popup.html / popup.css / popup.js)           Â¦
+Â¦   Persists user preferences via chrome.storage.sync         Â¦
 +-------------------------------------------------------------+
-                               ¦ chrome.storage.sync
+                               Â¦ chrome.storage.sync
 +------------------------------?------------------------------+
-¦             content/isolated.js (ISOLATED World)            ¦
-¦  - Reads and watches chrome.storage settings changes         ¦
-¦  - Fetches SponsorBlock API via privacy hash prefixes       ¦
-¦  - Caches video segments with LRU/FIFO memory bounding      ¦
-¦  - Validates extension context lifecycle across reloads     ¦
+Â¦             content/isolated.js (ISOLATED World)            Â¦
+Â¦  - Reads and watches chrome.storage settings changes         Â¦
+Â¦  - Fetches SponsorBlock API via privacy hash prefixes       Â¦
+Â¦  - Caches video segments with LRU/FIFO memory bounding      Â¦
+Â¦  - Validates extension context lifecycle across reloads     Â¦
 +-------------------------------------------------------------+
-                               ¦ window.postMessage (origin-checked)
+                               Â¦ window.postMessage (origin-checked)
 +------------------------------?------------------------------+
-¦                content/main.js (MAIN World)                 ¦
-¦  1. Quality automation (YouTube player settings menu)       ¦
-¦  2. SponsorBlock skipping (requestVideoFrameCallback sync)  ¦
-¦  3. Right-click + scroll volume gesture with HUD overlay    ¦
-¦  4. Shift + scroll speed control with 14px dynamic badge    ¦
-¦  5. Volume boost (150% Web Audio API GainNode pipeline)     ¦
-¦  6. Scroll mini-player (in-place anchor DOM stabilization)   ¦
-¦  7. Picture-in-Picture (Alt+P and MediaSession integration) ¦
+Â¦                content/main.js (MAIN World)                 Â¦
+Â¦  1. Quality automation (YouTube player settings menu)       Â¦
+Â¦  2. SponsorBlock skipping (requestVideoFrameCallback sync)  Â¦
+Â¦  3. Right-click + scroll volume gesture with HUD overlay    Â¦
+Â¦  4. Shift + scroll speed control with 14px dynamic badge    Â¦
+Â¦  5. Volume boost (150% Web Audio API GainNode pipeline)     Â¦
+Â¦  6. Scroll mini-player (in-place anchor DOM stabilization)   Â¦
+Â¦  7. Picture-in-Picture (Alt+P and MediaSession integration) Â¦
 +-------------------------------------------------------------+
 ```
 
@@ -156,24 +156,24 @@ npm test
 ```
 yt-adjust/
 +-- assets/
-¦   +-- banner.svg                 # Vector hero banner for repository
+Â¦   +-- banner.svg                 # Vector hero banner for repository
 +-- content/
-¦   +-- isolated.js                # Isolated world: Chrome storage, SponsorBlock API
-¦   +-- main.js                    # Main world: HTML5 video player integration (7 modules)
+Â¦   +-- isolated.js                # Isolated world: Chrome storage, SponsorBlock API
+Â¦   +-- main.js                    # Main world: HTML5 video player integration (7 modules)
 +-- icons/
-¦   +-- icon16.png
-¦   +-- icon48.png
-¦   +-- icon128.png
+Â¦   +-- icon16.png
+Â¦   +-- icon48.png
+Â¦   +-- icon128.png
 +-- popup/
-¦   +-- popup.html                 # Extension settings panel
-¦   +-- popup.css                  # Dark mode styling with 125% DPI support
-¦   +-- popup.js                   # Settings sync controller
+Â¦   +-- popup.html                 # Extension settings panel
+Â¦   +-- popup.css                  # Dark mode styling with 125% DPI support
+Â¦   +-- popup.js                   # Settings sync controller
 +-- tests/
-¦   +-- adversarial-stress-suite.mjs # Network and storage resilience tests
-¦   +-- empirical-challenger.js      # Player lifecycle, audio, CSP, and PiP tests
+Â¦   +-- adversarial-stress-suite.mjs # Network and storage resilience tests
+Â¦   +-- empirical-challenger.js      # Player lifecycle, audio, CSP, and PiP tests
 +-- types/
-¦   +-- extension.d.ts             # TypeScript declarations for Chrome & YouTube APIs
-+-- manifest.json                  # Manifest V3 configuration (v2.3.4)
+Â¦   +-- extension.d.ts             # TypeScript declarations for Chrome & YouTube APIs
++-- manifest.json                  # Manifest V3 configuration (v2.3.5)
 +-- package.json
 +-- tsconfig.json
 +-- .gitignore
