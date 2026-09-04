@@ -1,5 +1,5 @@
 // =============================================================================
-// YT Adjust — Main World Content Script (v2.3.0)
+// YT Adjust — Main World Content Script (v2.3.1)
 // =============================================================================
 // Runs in Chrome's MAIN execution world. Has direct access to YouTube's page
 // JS objects (such as #movie_player APIs) but CANNOT access chrome.* extension APIs.
@@ -2759,4 +2759,4 @@ function sendToIsolated(type, payload) {
 
 // Fire initialization
 init();
-console.log("[YT Adjust] Main world script loaded (v2.3.0)");
+console.log("[YT Adjust] Main world script loaded (v2.3.1)");
