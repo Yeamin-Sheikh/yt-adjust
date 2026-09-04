@@ -1,5 +1,5 @@
 // =============================================================================
-// YT Adjust — Main World Content Script (v2.3.1)
+// YT Adjust — Main World Content Script (v2.3.2)
 // =============================================================================
 // Runs in Chrome's MAIN execution world. Has direct access to YouTube's page
 // JS objects (such as #movie_player APIs) but CANNOT access chrome.* extension APIs.
@@ -2291,8 +2291,11 @@ async function exitAutoPip() {
       // programmatically, the browser fires leavepictureinpicture on the video element,
       // but YouTube's player UI layer may not process it in time. This leaves the
       // "Playing in picture-in-picture" overlay stuck on screen with a black video area.
-      // We fix this by force-clearing YouTube's PiP overlay after a short delay.
-      setTimeout(() => { forceExitYouTubePipState(); }, 120);
+      // We run cleanup in 3 staggered passes because YouTube's internal state
+      // updates asynchronously at unpredictable timing.
+      setTimeout(() => { forceExitYouTubePipState(); }, 100);
+      setTimeout(() => { forceExitYouTubePipState(); }, 500);
+      setTimeout(() => { forceExitYouTubePipState(); }, 1500);
     } catch (err) {
       console.log("[YT Adjust] Auto-PiP exit failed:", err);
     } finally {
@@ -2309,11 +2312,16 @@ async function exitAutoPip() {
  * the browser closes the PiP window, but YouTube's player UI may remain stuck
  * showing the black overlay with "Playing in picture-in-picture" text.
  *
- * This function handles the cleanup by:
- * 1. Removing YouTube's ytp-pip-mode CSS class from the player
- * 2. Force-hiding any lingering PiP overlay elements
- * 3. Dispatching a resize event to trigger player re-render
- * 4. Calling YouTube's setInternalSize() to recalculate video dimensions
+ * This function uses multiple strategies because YouTube frequently changes
+ * its internal class names. Rather than hardcoding specific classes, we:
+ * 1. Dynamically find and remove ALL classes containing "pip" from the player
+ * 2. Find the overlay by its visible text content ("Playing in picture-in-picture")
+ * 3. Force video element visibility and re-render via pause/play cycle
+ * 4. Dispatch resize to trigger YouTube's internal dimension recalculation
+ *
+ * Called with a delay after exitPictureInPicture() and also as a safety net
+ * from onLeavePictureInPicture(). Runs multiple passes with staggered timing
+ * to handle YouTube's async internal state updates.
  *
  * @returns {void}
  */
@@ -2324,59 +2332,108 @@ function forceExitYouTubePipState() {
   const moviePlayer = getPlayer();
   if (!moviePlayer) return;
 
-  // YouTube adds CSS classes like 'ytp-pip-mode' or 'ytp-pip-fifo' to #movie_player
-  // when entering PiP. These control the "Playing in picture-in-picture" overlay.
-  const pipClasses = ["ytp-pip-mode", "ytp-pip-fifo"];
-  let wasStuck = false;
+  // --- Strategy 1: Remove ALL pip-related CSS classes from #movie_player ---
+  // YouTube uses obfuscated class names that change with updates, so we scan
+  // the full classList for anything containing "pip" (case-insensitive).
+  const classesToRemove = [];
+  for (const cls of moviePlayer.classList) {
+    if (cls.toLowerCase().includes("pip")) {
+      classesToRemove.push(cls);
+    }
+  }
+  if (classesToRemove.length > 0) {
+    moviePlayer.classList.remove(...classesToRemove);
+    console.log("[YT Adjust] Removed PiP classes from player:", classesToRemove.join(", "));
+  }
 
-  for (const cls of pipClasses) {
-    if (moviePlayer.classList.contains(cls)) {
-      moviePlayer.classList.remove(cls);
-      wasStuck = true;
+  // --- Strategy 2: Find and hide the overlay by its text content ---
+  // The "Playing in picture-in-picture" overlay is a container inside #movie_player.
+  // We locate it by searching for elements whose textContent matches, then walk up
+  // to the nearest positioned container and hide it.
+  const walker = document.createTreeWalker(moviePlayer, NodeFilter.SHOW_TEXT, null);
+  let textNode;
+  while ((textNode = walker.nextNode())) {
+    const text = (textNode.textContent || "").trim().toLowerCase();
+    if (text.includes("playing in picture-in-picture") || text.includes("picture-in-picture")) {
+      // Walk up from the text node to find the overlay container
+      let overlay = /** @type {HTMLElement | null} */ (textNode.parentElement);
+      // Go up a few levels to find the actual overlay wrapper (not just the span)
+      for (let i = 0; i < 5 && overlay; i++) {
+        if (overlay === moviePlayer) break;
+        const style = window.getComputedStyle(overlay);
+        // The overlay container is typically absolutely positioned and covers the player
+        if (style.position === "absolute" || style.position === "fixed") {
+          overlay.style.display = "none";
+          console.log("[YT Adjust] Hidden PiP overlay container:", overlay.className || overlay.tagName);
+          break;
+        }
+        overlay = /** @type {HTMLElement | null} */ (overlay.parentElement);
+      }
     }
   }
 
-  // Find and hide YouTube's PiP overlay container (the black screen with text)
-  const pipOverlay = /** @type {HTMLElement | null} */ (
-    moviePlayer.querySelector(".ytp-pip-window")
-  );
-  if (pipOverlay) {
-    pipOverlay.style.display = "none";
-    wasStuck = true;
+  // --- Strategy 3: Hide any element with pip-related class names inside the player ---
+  // Catch any overlay elements we might have missed with the text search.
+  const pipSelectors = [
+    "[class*='pip' i]",  // Any element with 'pip' in a class name
+    "[class*='Pip' i]",
+    "[class*='PIP' i]",
+  ];
+  for (const sel of pipSelectors) {
+    try {
+      const els = moviePlayer.querySelectorAll(sel);
+      for (const el of els) {
+        const htmlEl = /** @type {HTMLElement} */ (el);
+        const style = window.getComputedStyle(htmlEl);
+        // Only hide absolutely positioned overlays, not structural elements
+        if (style.position === "absolute" && htmlEl.offsetWidth > 100 && htmlEl.offsetHeight > 100) {
+          htmlEl.style.display = "none";
+        }
+      }
+    } catch (e) {
+      // querySelectorAll may fail with invalid selectors in some engines
+    }
   }
 
-  // Also check for a broader pip scrim/backdrop element
-  const pipScrim = /** @type {HTMLElement | null} */ (
-    moviePlayer.querySelector(".ytp-pip-scrim")
-  );
-  if (pipScrim) {
-    pipScrim.style.display = "none";
-    wasStuck = true;
-  }
-
-  if (wasStuck) {
-    console.log("[YT Adjust] Cleared stuck YouTube PiP overlay state");
-  }
-
-  // Force the video element visible and properly sized
+  // --- Strategy 4: Force video element visible and trigger re-render ---
   const video = getVideo();
   if (video) {
     video.style.opacity = "1";
     video.style.visibility = "visible";
+    video.style.position = "";
+
+    // Brief pause/play cycle forces the browser to re-render the video frame
+    // in the main player viewport instead of the (now-closed) PiP window.
+    if (!video.paused && !video.ended) {
+      const currentTime = video.currentTime;
+      video.pause();
+      requestAnimationFrame(() => {
+        video.play().catch(() => {});
+        // Seek back to exact position to avoid any drift
+        if (Math.abs(video.currentTime - currentTime) > 0.5) {
+          video.currentTime = currentTime;
+        }
+      });
+    }
   }
 
-  // Trigger a window resize event so YouTube's player recalculates video dimensions.
-  // This is the same mechanism YouTube uses internally when transitioning between
-  // theater mode, fullscreen, and normal view.
+  // --- Strategy 5: Dispatch resize event to force YouTube's player recalculation ---
   try {
     window.dispatchEvent(new Event("resize"));
   } catch (e) {}
 
-  // Call YouTube's own setInternalSize() method to force dimension recalculation
-  if (moviePlayer && typeof /** @type {any} */ (moviePlayer).setInternalSize === "function") {
-    try {
-      /** @type {any} */ (moviePlayer).setInternalSize();
-    } catch (e) {}
+  // --- Strategy 6: Call YouTube's internal player API methods if available ---
+  const anyPlayer = /** @type {any} */ (moviePlayer);
+  if (typeof anyPlayer.setInternalSize === "function") {
+    try { anyPlayer.setInternalSize(); } catch (e) {}
+  }
+  // YouTube's player sometimes has a wakeUpControls method
+  if (typeof anyPlayer.wakeUpControls === "function") {
+    try { anyPlayer.wakeUpControls(); } catch (e) {}
+  }
+  // setSizeStyle recalculates layout based on theater/default mode
+  if (typeof anyPlayer.setSizeStyle === "function") {
+    try { anyPlayer.setSizeStyle(false, false); } catch (e) {}
   }
 }
 
@@ -2444,7 +2501,10 @@ function onLeavePictureInPicture(e) {
 
   // Safety net: clear YouTube's PiP overlay regardless of how PiP was exited
   // (user closed the PiP window, Alt+P toggle, auto-PiP tab return, etc.)
-  setTimeout(() => { forceExitYouTubePipState(); }, 150);
+  // Staggered passes to catch YouTube's async internal state updates.
+  setTimeout(() => { forceExitYouTubePipState(); }, 100);
+  setTimeout(() => { forceExitYouTubePipState(); }, 500);
+  setTimeout(() => { forceExitYouTubePipState(); }, 1500);
 
   if (state.settings.miniPlayerEnabled && location.pathname === "/watch") {
     onMiniPlayerScroll();
@@ -2759,4 +2819,4 @@ function sendToIsolated(type, payload) {
 
 // Fire initialization
 init();
-console.log("[YT Adjust] Main world script loaded (v2.3.1)");
+console.log("[YT Adjust] Main world script loaded (v2.3.2)");

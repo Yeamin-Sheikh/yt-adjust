@@ -3,7 +3,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/Yeamin-Sheikh/yt-adjust/releases/tag/v2.3.1"><img src="https://img.shields.io/badge/version-2.3.1-FF0000?style=for-the-badge&logo=youtube&logoColor=white" alt="Version 2.3.1"></a>
+  <a href="https://github.com/Yeamin-Sheikh/yt-adjust/releases/tag/v2.3.2"><img src="https://img.shields.io/badge/version-2.3.2-FF0000?style=for-the-badge&logo=youtube&logoColor=white" alt="Version 2.3.2"></a>
   <a href="https://developer.chrome.com/docs/extensions/mv3/intro/"><img src="https://img.shields.io/badge/Manifest-V3-10b981?style=for-the-badge&logo=googlechrome&logoColor=white" alt="Manifest V3"></a>
   <img src="https://img.shields.io/badge/tests-61%20passing-38bdf8?style=for-the-badge&logo=checkmarx&logoColor=white" alt="61 Passing Tests">
   <img src="https://img.shields.io/badge/Chromium-Supported-f59e0b?style=for-the-badge&logo=googlechrome&logoColor=white" alt="Chromium Supported">
@@ -16,8 +16,8 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/Yeamin-Sheikh/yt-adjust/releases/download/v2.3.1/yt-adjust-v2.3.1.zip">
-    <img src="https://img.shields.io/badge/Download_Extension_ZIP-v2.3.1-d90429?style=for-the-badge&logo=zip&logoColor=white" alt="Download ZIP">
+  <a href="https://github.com/Yeamin-Sheikh/yt-adjust/releases/download/v2.3.2/yt-adjust-v2.3.2.zip">
+    <img src="https://img.shields.io/badge/Download_Extension_ZIP-v2.3.2-d90429?style=for-the-badge&logo=zip&logoColor=white" alt="Download ZIP">
   </a>
 </p>
 
@@ -63,7 +63,7 @@
 
 ### Option 1: Load pre-built release ZIP (recommended)
 
-1. Download **[yt-adjust-v2.3.1.zip](https://github.com/Yeamin-Sheikh/yt-adjust/releases/download/v2.3.1/yt-adjust-v2.3.1.zip)** from the releases page.
+1. Download **[yt-adjust-v2.3.2.zip](https://github.com/Yeamin-Sheikh/yt-adjust/releases/download/v2.3.2/yt-adjust-v2.3.2.zip)** from the releases page.
 2. Extract the archive into a folder on your computer.
 3. Open your Chromium browser (Chrome, Helium, Brave, Edge, Opera) and navigate to `chrome://extensions` (or `helium://extensions`).
 4. Toggle **Developer mode** in the top-right corner.
@@ -173,7 +173,7 @@ yt-adjust/
 ¦   +-- empirical-challenger.js      # Player lifecycle, audio, CSP, and PiP tests
 +-- types/
 ¦   +-- extension.d.ts             # TypeScript declarations for Chrome & YouTube APIs
-+-- manifest.json                  # Manifest V3 configuration (v2.3.1)
++-- manifest.json                  # Manifest V3 configuration (v2.3.2)
 +-- package.json
 +-- tsconfig.json
 +-- .gitignore
