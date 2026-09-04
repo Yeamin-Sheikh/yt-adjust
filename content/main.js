@@ -71,6 +71,7 @@
  * @property {boolean} [_adSkipLogged] - Guard flag preventing console spam during ad playback
  * @property {boolean} pipAutoTriggered - True if Picture-in-Picture was automatically engaged on tab switch
  * @property {boolean} pipManualTriggered - True if Picture-in-Picture was manually engaged via Alt+P
+ * @property {number} [pipEnteredTime] - Timestamp in ms when Picture-in-Picture was engaged
  */
 
 // ---------------------------------------------------------------------------
@@ -91,7 +92,7 @@ const state = {
     volumeBoostEnabled: true,
     miniPlayerEnabled: true,
     pipEnabled: true,
-    pipAutoOnTabSwitch: false,
+    pipAutoOnTabSwitch: true,
   },
 
   // SponsorBlock
@@ -133,6 +134,7 @@ const state = {
   // Picture-in-Picture
   pipAutoTriggered: false,
   pipManualTriggered: false,
+  pipEnteredTime: 0,
 };
 
 // ---------------------------------------------------------------------------
@@ -2096,77 +2098,19 @@ let pipInitialized = false;
 let pipToggling = false;
 let autoPipToggling = false;
 let pendingExitAutoPip = false;
-let pipWatchdogTimer = /** @type {any} */ (null);
 
 /**
- * Determines whether the document is currently visible or active to the user.
- * Handles custom browser shells (such as Helium) where visibilityState or focus
- * might have slightly different dispatch timing.
- *
- * @returns {boolean}
- */
-function isDocumentVisible() {
-  if (document.visibilityState === "hidden" || document.hidden === true) {
-    return false;
-  }
-  if (document.visibilityState === "visible" || document.hidden === false) {
-    return true;
-  }
-  if (typeof document.hasFocus === "function" && document.hasFocus()) {
-    return true;
-  }
-  return false;
-}
-
-/**
- * Starts a lightweight polling watchdog while Picture-in-Picture is active.
- * If the tab is visible or has focus and the video was auto-triggered into PiP,
- * this watchdog ensures PiP exits even if custom browser shells (like Helium)
- * fail to dispatch standard focus or visibilitychange events.
- *
- * @returns {void}
- */
-function startPipWatchdog() {
-  stopPipWatchdog();
-  pipWatchdogTimer = setInterval(() => {
-    if (!document.pictureInPictureElement) {
-      stopPipWatchdog();
-      return;
-    }
-    // Do not interfere if user intentionally activated PiP via Alt+P
-    if (state.pipManualTriggered) {
-      return;
-    }
-    // If tab is visible or has focus, exit auto-PiP
-    if (isDocumentVisible()) {
-      console.log("[YT Adjust] Watchdog detected visible tab while in auto-PiP; exiting");
-      exitAutoPip();
-    }
-  }, 200);
-}
-
-/**
- * Stops the active Picture-in-Picture return watchdog interval.
- *
- * @returns {void}
- */
-function stopPipWatchdog() {
-  if (pipWatchdogTimer) {
-    clearInterval(pipWatchdogTimer);
-    pipWatchdogTimer = null;
-  }
-}
-
-/**
- * Interaction and activation callback for custom browser shells (like Helium).
- * When user interacts with the page or returns to the tab, immediately triggers
- * auto-PiP exit if PiP is currently active.
+ * Interaction and activation callback for tab return across all browsers (Chrome, Helium, etc.).
+ * When user returns to the tab and interacts with the page or focuses it, triggers auto-PiP
+ * exit if PiP is currently active and at least 500ms has elapsed since entering.
  *
  * @returns {void}
  */
 function checkPipReturn() {
-  if (document.pictureInPictureElement && !state.pipManualTriggered && isDocumentVisible()) {
-    exitAutoPip();
+  if (document.pictureInPictureElement && !state.pipManualTriggered) {
+    if (Date.now() - (state.pipEnteredTime || 0) > 500) {
+      exitAutoPip();
+    }
   }
 }
 
@@ -2320,13 +2264,14 @@ function syncMediaSessionPipHandler(enable) {
           try {
             bindPipVideo(video);
             await video.requestPictureInPicture();
+            state.pipEnteredTime = Date.now();
             console.log("[YT Adjust] Auto-PiP activated via mediaSession");
           } catch (err) {
             state.pipAutoTriggered = false;
             console.log("[YT Adjust] Auto-PiP mediaSession activation failed:", err);
           } finally {
             autoPipToggling = false;
-            if (pendingExitAutoPip || isDocumentVisible()) {
+            if (pendingExitAutoPip) {
               pendingExitAutoPip = false;
               exitAutoPip();
             }
@@ -2368,13 +2313,14 @@ async function triggerAutoPip() {
     try {
       bindPipVideo(video);
       await video.requestPictureInPicture();
+      state.pipEnteredTime = Date.now();
       console.log("[YT Adjust] Auto-PiP activated on tab switch");
     } catch (err) {
       state.pipAutoTriggered = false;
       console.log("[YT Adjust] Auto-PiP activation failed:", err);
     } finally {
       autoPipToggling = false;
-      if (pendingExitAutoPip || isDocumentVisible()) {
+      if (pendingExitAutoPip) {
         pendingExitAutoPip = false;
         exitAutoPip();
       }
@@ -2495,23 +2441,22 @@ function onPipVisibilityChange() {
 }
 
 /**
- * Handles window blur event. Triggers auto-PiP if the tab is hidden.
+ * Handles window blur event. Triggers auto-PiP when window loses focus.
  *
  * @returns {void}
  */
 function onPipWindowBlur() {
-  if (document.visibilityState === "hidden" || document.hidden) {
-    triggerAutoPip();
-  }
+  if (!state.settings.pipEnabled || !state.settings.pipAutoOnTabSwitch) return;
+  triggerAutoPip();
 }
 
 /**
- * Handles window focus event. Exits auto-PiP if tab is visible again.
+ * Handles window focus event. Exits auto-PiP if tab is focused again.
  *
  * @returns {void}
  */
 function onPipWindowFocus() {
-  if (document.visibilityState === "visible") {
+  if (Date.now() - (state.pipEnteredTime || 0) > 500) {
     exitAutoPip();
   }
 }
@@ -2519,7 +2464,6 @@ function onPipWindowFocus() {
 /**
  * Handles entry into Picture-in-Picture mode.
  * Synchronizes manual vs automatic trigger state and cleans up floating mini-player.
- * Starts watchdog timer and checks if user returned while in-flight.
  *
  * @param {Event} [e]
  * @returns {void}
@@ -2527,19 +2471,11 @@ function onPipWindowFocus() {
 function onEnterPictureInPicture(e) {
   if (!state.pipManualTriggered) {
     state.pipAutoTriggered = true;
+    state.pipEnteredTime = Date.now();
   }
   // If in-page floating mini-player was active, deactivate it to prevent duplicate player frames
   if (state.miniPlayerActive) {
     deactivateMiniPlayer();
-  }
-
-  // Start background watchdog to catch tab return in custom shells (like Helium)
-  startPipWatchdog();
-
-  // If tab is already visible when enterpictureinpicture resolves, exit immediately
-  if (!state.pipManualTriggered && isDocumentVisible()) {
-    console.log("[YT Adjust] Document is already visible on enterpictureinpicture; exiting auto-PiP");
-    exitAutoPip();
   }
 }
 
@@ -2553,8 +2489,8 @@ function onEnterPictureInPicture(e) {
 function onLeavePictureInPicture(e) {
   state.pipAutoTriggered = false;
   state.pipManualTriggered = false;
+  state.pipEnteredTime = 0;
   pendingExitAutoPip = false;
-  stopPipWatchdog();
 
   forceExitYouTubePipState();
   setTimeout(forceExitYouTubePipState, 50);
@@ -2876,4 +2812,4 @@ function sendToIsolated(type, payload) {
 
 // Fire initialization
 init();
-console.log("[YT Adjust] Main world script loaded (v2.3.6)");
+console.log("[YT Adjust] Main world script loaded (v2.3.7)");

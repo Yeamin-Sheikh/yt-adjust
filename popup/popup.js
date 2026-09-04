@@ -1,5 +1,5 @@
 /**
- * YT Adjust — Popup Settings Management (v2.3.6)
+ * YT Adjust — Popup Settings Management (v2.3.7)
  * ===============================================
  * Handles loading, updating, and persisting extension settings to chrome.storage.sync.
  * Every user interaction is saved instantly without requiring a manual save button.
@@ -55,7 +55,7 @@ const DEFAULT_SETTINGS = {
   volumeBoostEnabled: true,
   miniPlayerEnabled: true,
   pipEnabled: true,
-  pipAutoOnTabSwitch: false,
+  pipAutoOnTabSwitch: true,
 };
 
 // Cached DOM element references

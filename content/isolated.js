@@ -44,7 +44,7 @@ const DEFAULTS = {
   volumeBoostEnabled: true,
   miniPlayerEnabled: true,
   pipEnabled: true,
-  pipAutoOnTabSwitch: false,
+  pipAutoOnTabSwitch: true,
 };
 
 // SponsorBlock API base URL (public segment query endpoint)

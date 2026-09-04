@@ -464,6 +464,10 @@ globalThis.showSpeedOverlay = showSpeedOverlay;
 globalThis.injectSpeedButton = injectSpeedButton;
 globalThis.injectBoostButton = injectBoostButton;
 globalThis.setupVolumeGesture = setupVolumeGesture;
+globalThis.setupPictureInPicture = setupPictureInPicture;
+globalThis.bindPipVideo = bindPipVideo;
+globalThis.checkPipReturn = checkPipReturn;
+globalThis.exitAutoPip = exitAutoPip;
 `;
   vm.runInContext(code, context);
   return context;
@@ -1748,7 +1752,7 @@ async function runTestAsync(name, fn) {
     assert.strictEqual(ctx.state.pipAutoTriggered, false);
   });
 
-  await runTestAsync("onEnterPictureInPicture exits auto-PiP immediately if document is already visible", async () => {
+  await runTestAsync("onEnterPictureInPicture preserves auto-PiP even if document visibilityState is visible (Helium tab support)", async () => {
     const env = createDomEnvironment();
     const ctx = loadMainJsInContext(env, true);
     const dom = setupPipDom(env);
@@ -1756,17 +1760,17 @@ async function runTestAsync(name, fn) {
     ctx.setupPictureInPicture();
     ctx.bindPipVideo(dom.video);
 
-    // Video enters PiP while document is visible
+    // Video enters PiP while document is visible (Helium keeps background tabs in visible state)
     env.document.visibilityState = "visible";
     env.document.pictureInPictureElement = dom.video;
     dom.video.dispatchEvent({ type: "enterpictureinpicture" });
     await new Promise((r) => setImmediate(r));
 
-    assert.strictEqual(dom.getPipExited(), 1, "Immediately exited PiP because document is visible");
-    assert.strictEqual(ctx.state.pipAutoTriggered, false);
+    assert.strictEqual(dom.getPipExited(), 0, "Does NOT immediately exit PiP on enter in visible tabs");
+    assert.strictEqual(ctx.state.pipAutoTriggered, true, "pipAutoTriggered is preserved");
   });
 
-  await runTestAsync("startPipWatchdog detects visible tab and triggers exitAutoPip even without visibility/focus events", async () => {
+  await runTestAsync("checkPipReturn exits auto-PiP after debounce window when user returns to tab", async () => {
     const env = createDomEnvironment();
     const ctx = loadMainJsInContext(env, true);
     const dom = setupPipDom(env);
@@ -1774,20 +1778,17 @@ async function runTestAsync(name, fn) {
     ctx.setupPictureInPicture();
     ctx.bindPipVideo(dom.video);
 
-    // Video is in PiP, document was hidden
-    env.document.visibilityState = "hidden";
+    // Video is in PiP
     env.document.pictureInPictureElement = dom.video;
     ctx.state.pipAutoTriggered = true;
-    ctx.startPipWatchdog();
+    ctx.state.pipEnteredTime = Date.now() - 600; // Entered 600ms ago (> 500ms debounce)
 
-    // Tab silently becomes visible (no events dispatched by browser shell)
-    env.document.visibilityState = "visible";
+    // User returns and interacts (pointerdown / focus / mousemove)
+    ctx.checkPipReturn();
+    await new Promise((r) => setTimeout(r, 20));
 
-    // Wait for watchdog interval (200ms)
-    await new Promise((r) => setTimeout(r, 250));
-
-    assert.strictEqual(dom.getPipExited(), 1, "Watchdog detected visible document and called exitAutoPip");
-    ctx.stopPipWatchdog();
+    assert.strictEqual(dom.getPipExited(), 1, "checkPipReturn cleanly exited auto-PiP on tab return");
+    assert.strictEqual(ctx.state.pipAutoTriggered, false);
   });
 
   console.log(`\nStress test suite completed: ${passedTests}/${totalTests} tests passed.`);
