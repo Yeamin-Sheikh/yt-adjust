@@ -1,5 +1,5 @@
 // =============================================================================
-// YT Adjust — Main World Content Script (v2.3.3)
+// YT Adjust — Main World Content Script (v2.3.4)
 // =============================================================================
 // Runs in Chrome's MAIN execution world. Has direct access to YouTube's page
 // JS objects (such as #movie_player APIs) but CANNOT access chrome.* extension APIs.
@@ -2180,6 +2180,8 @@ async function togglePictureInPicture() {
       state.pipManualTriggered = false;
       await document.exitPictureInPicture();
       console.log("[YT Adjust] Exited Picture-in-Picture");
+      setTimeout(() => { forceExitYouTubePipState(); }, 50);
+      setTimeout(() => { forceExitYouTubePipState(); }, 200);
     } else {
       const video = getVideo();
       if (!video) {
@@ -2292,13 +2294,6 @@ async function exitAutoPip() {
       state.pipAutoTriggered = false;
       await document.exitPictureInPicture();
       console.log("[YT Adjust] Auto-PiP exited on tab return");
-
-      // Notify YouTube player to recalculate internal viewport
-      try { window.dispatchEvent(new Event("resize")); } catch (e) {}
-      const moviePlayer = getPlayer();
-      if (moviePlayer && typeof /** @type {any} */ (moviePlayer).setInternalSize === "function") {
-        try { /** @type {any} */ (moviePlayer).setInternalSize(); } catch (e) {}
-      }
     } catch (err) {
       console.log("[YT Adjust] Auto-PiP exit failed:", err);
     } finally {
@@ -2306,6 +2301,112 @@ async function exitAutoPip() {
     }
   }
   state.pipAutoTriggered = false;
+
+  // Staggered cleanup passes to force overlay removal and video surface repaint
+  setTimeout(() => { forceExitYouTubePipState(); }, 50);
+  setTimeout(() => { forceExitYouTubePipState(); }, 200);
+  setTimeout(() => { forceExitYouTubePipState(); }, 600);
+}
+
+/**
+ * Force-clears YouTube's internal "Playing in picture-in-picture" overlay state.
+ * When PiP exits, YouTube's player UI may remain stuck showing the black overlay
+ * with "Playing in picture-in-picture" text.
+ *
+ * This function:
+ * 1. Removes all pip-related CSS classes from #movie_player
+ * 2. Hides any overlay container containing "Playing in picture-in-picture" text
+ * 3. Hides any absolutely-positioned elements matching PiP class patterns
+ * 4. Kicks the video element to re-render the hardware surface on the page
+ * 5. Dispatches resize and invokes YouTube's player layout methods
+ *
+ * @returns {void}
+ */
+function forceExitYouTubePipState() {
+  if (document.pictureInPictureElement) return;
+
+  const moviePlayer = getPlayer();
+  if (!moviePlayer) return;
+
+  // 1. Remove all pip-related CSS classes from #movie_player
+  const classesToRemove = [];
+  for (const cls of moviePlayer.classList) {
+    if (cls.toLowerCase().includes("pip")) {
+      classesToRemove.push(cls);
+    }
+  }
+  if (classesToRemove.length > 0) {
+    moviePlayer.classList.remove(...classesToRemove);
+  }
+
+  // 2. Search container (ytd-player or movie_player) for overlay by text content
+  const container = getYtdPlayer() || moviePlayer;
+  const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT, null);
+  let textNode;
+  while ((textNode = walker.nextNode())) {
+    const text = (textNode.textContent || "").trim().toLowerCase();
+    if (text.includes("playing in picture-in-picture") || text.includes("picture-in-picture")) {
+      let overlay = /** @type {HTMLElement | null} */ (textNode.parentElement);
+      for (let i = 0; i < 6 && overlay; i++) {
+        if (overlay === container || overlay === document.body) break;
+        const style = window.getComputedStyle(overlay);
+        if (style.position === "absolute" || style.position === "fixed") {
+          overlay.style.display = "none";
+          break;
+        }
+        overlay = /** @type {HTMLElement | null} */ (overlay.parentElement);
+      }
+    }
+  }
+
+  // 3. Hide any elements with pip in their class name that are positioned overlays
+  const pipSelectors = ["[class*='pip' i]", "[class*='Pip' i]", "[class*='PIP' i]"];
+  for (const sel of pipSelectors) {
+    try {
+      const els = container.querySelectorAll(sel);
+      for (const el of els) {
+        const htmlEl = /** @type {HTMLElement} */ (el);
+        const style = window.getComputedStyle(htmlEl);
+        if (style.position === "absolute" && htmlEl.offsetWidth > 50 && htmlEl.offsetHeight > 50) {
+          htmlEl.style.display = "none";
+        }
+      }
+    } catch (e) {}
+  }
+
+  // 4. Force video element visible and trigger hardware presentation repaint
+  const video = getVideo();
+  if (video) {
+    video.style.opacity = "1";
+    video.style.visibility = "visible";
+    video.style.position = "";
+
+    if (!video.paused && !video.ended) {
+      const t = video.currentTime;
+      video.pause();
+      requestAnimationFrame(() => {
+        video.play().catch(() => {});
+        if (Math.abs(video.currentTime - t) > 0.5) {
+          video.currentTime = t;
+        }
+      });
+    }
+  }
+
+  // 5. Dispatch resize event to trigger YouTube's player recalculation
+  try { window.dispatchEvent(new Event("resize")); } catch (e) {}
+
+  // 6. Call YouTube player methods to recalculate viewport and wake up controls
+  const anyPlayer = /** @type {any} */ (moviePlayer);
+  if (typeof anyPlayer.setInternalSize === "function") {
+    try { anyPlayer.setInternalSize(); } catch (e) {}
+  }
+  if (typeof anyPlayer.wakeUpControls === "function") {
+    try { anyPlayer.wakeUpControls(); } catch (e) {}
+  }
+  if (typeof anyPlayer.setSizeStyle === "function") {
+    try { anyPlayer.setSizeStyle(false, false); } catch (e) {}
+  }
 }
 
 /**
@@ -2371,12 +2472,10 @@ function onLeavePictureInPicture(e) {
   state.pipAutoTriggered = false;
   state.pipManualTriggered = false;
 
-  // Notify YouTube player to recalculate viewport after leaving PiP
-  try { window.dispatchEvent(new Event("resize")); } catch (e) {}
-  const moviePlayer = getPlayer();
-  if (moviePlayer && typeof /** @type {any} */ (moviePlayer).setInternalSize === "function") {
-    try { /** @type {any} */ (moviePlayer).setInternalSize(); } catch (e) {}
-  }
+  // Staggered cleanup passes to force overlay removal and video surface repaint
+  setTimeout(() => { forceExitYouTubePipState(); }, 50);
+  setTimeout(() => { forceExitYouTubePipState(); }, 200);
+  setTimeout(() => { forceExitYouTubePipState(); }, 600);
 
   if (state.settings.miniPlayerEnabled && location.pathname === "/watch") {
     onMiniPlayerScroll();
@@ -2694,4 +2793,4 @@ function sendToIsolated(type, payload) {
 
 // Fire initialization
 init();
-console.log("[YT Adjust] Main world script loaded (v2.3.3)");
+console.log("[YT Adjust] Main world script loaded (v2.3.4)");
