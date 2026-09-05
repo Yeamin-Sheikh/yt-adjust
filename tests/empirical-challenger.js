@@ -61,6 +61,21 @@ function createDomEnvironment(options = {}) {
       this.attributes = new Map();
       this.id = "";
       this.className = "";
+      const self = this;
+      this.classList = {
+        add(...cls) {
+          const current = self.className.split(/\s+/).filter(Boolean);
+          for (const c of cls) if (!current.includes(c)) current.push(c);
+          self.className = current.join(" ");
+        },
+        remove(...cls) {
+          const current = self.className.split(/\s+/).filter(Boolean);
+          self.className = current.filter((c) => !cls.includes(c)).join(" ");
+        },
+        contains(c) {
+          return self.className.split(/\s+/).includes(c);
+        },
+      };
       this.textContent = "";
       this.title = "";
       this.listeners = new Map();
@@ -181,11 +196,16 @@ function createDomEnvironment(options = {}) {
 
     querySelectorAll(selector) {
       const results = [];
+      const parts = selector.split(",").map((s) => s.trim());
       const search = (node) => {
         for (const c of node.children) {
-          if (selector.startsWith("#") && c.id === selector.slice(1)) results.push(c);
-          else if (selector.startsWith(".") && c.className && c.className.includes(selector.slice(1))) results.push(c);
-          else if (c.tagName.toLowerCase() === selector.toLowerCase()) results.push(c);
+          const match = parts.some((p) => {
+            if (p.startsWith("#") && c.id === p.slice(1)) return true;
+            if (p.startsWith(".") && c.className && c.className.includes(p.slice(1))) return true;
+            if (c.tagName.toLowerCase() === p.toLowerCase()) return true;
+            return false;
+          });
+          if (match && !results.includes(c)) results.push(c);
           search(c);
         }
       };
@@ -1789,6 +1809,77 @@ async function runTestAsync(name, fn) {
 
     assert.strictEqual(dom.getPipExited(), 1, "checkPipReturn cleanly exited auto-PiP on tab return");
     assert.strictEqual(ctx.state.pipAutoTriggered, false);
+  });
+
+  // =========================================================================
+  // SECTION 6: Skip Notification Toast Lifecycle & Anti-Zombie Guards
+  // =========================================================================
+  console.log("\n--- SECTION 6: Skip Notification Toast Lifecycle & Anti-Zombie Guards ---");
+
+  await runTestAsync("Skip notification toast: rapid sequential skips immediately wipe earlier toasts leaving exactly 1 element", async () => {
+    const env = createDomEnvironment();
+    const ctx = loadMainJsInContext(env, true);
+    const moviePlayer = env.document.createElement("div");
+    moviePlayer.id = "movie_player";
+    env.document.body.appendChild(moviePlayer);
+    env.elements.set("movie_player", moviePlayer);
+
+    // Simulate 3 rapid consecutive skips (like overlapping segments)
+    ctx.showSkipToast("Intro skipped (4s)", 142.5);
+    ctx.showSkipToast("Self-promo skipped (21s)", 145.9);
+    ctx.showSkipToast("Intro skipped (5s)", 167.1);
+
+    const toasts = env.document.querySelectorAll("#yt-adjust-toast, .yt-adjust-toast");
+    assert.strictEqual(toasts.length, 1, "Exactly one toast exists in DOM despite rapid successive calls");
+    assert.strictEqual(toasts[0].querySelector("span").textContent, "Intro skipped (5s)", "Active toast reflects latest skip");
+
+    ctx.dismissSkipToast(true);
+    const afterDismiss = env.document.querySelectorAll("#yt-adjust-toast, .yt-adjust-toast");
+    assert.strictEqual(afterDismiss.length, 0, "All toasts completely purged on immediate dismiss");
+  });
+
+  await runTestAsync("Skip notification toast: dismissSkipToast(false) immediately strips identity and removes node after transition", async () => {
+    const env = createDomEnvironment();
+    const ctx = loadMainJsInContext(env, true);
+    const moviePlayer = env.document.createElement("div");
+    moviePlayer.id = "movie_player";
+    env.document.body.appendChild(moviePlayer);
+    env.elements.set("movie_player", moviePlayer);
+
+    ctx.showSkipToast("Sponsor skipped (30s)", 100);
+    const toast = env.document.getElementById("yt-adjust-toast");
+    assert.ok(toast, "Toast was mounted");
+
+    ctx.dismissSkipToast(false);
+    assert.strictEqual(toast.id, "", "ID removed immediately so queries never match dying element");
+    assert.strictEqual(toast.className.includes("yt-adjust-toast"), false, "Class removed immediately");
+    assert.strictEqual(toast.style.opacity, "0", "Opacity set to 0 for transition");
+
+    await new Promise((r) => setTimeout(r, 250));
+    assert.strictEqual(toast.parentElement, null, "Toast node unmounted from parent after transition timeout");
+  });
+
+  await runTestAsync("Skip notification toast: mouseenter pauses dismiss timer and mouseleave schedules dismissal", async () => {
+    const env = createDomEnvironment();
+    const ctx = loadMainJsInContext(env, true);
+    const moviePlayer = env.document.createElement("div");
+    moviePlayer.id = "movie_player";
+    env.document.body.appendChild(moviePlayer);
+    env.elements.set("movie_player", moviePlayer);
+
+    ctx.showSkipToast("Intro skipped (5s)", 10);
+    const toast = env.document.getElementById("yt-adjust-toast");
+    assert.ok(toast, "Toast created");
+
+    // Hover pauses timer
+    toast.dispatchEvent({ type: "mouseenter" });
+    await new Promise((r) => setTimeout(r, 100));
+
+    // Mouse leaves
+    toast.dispatchEvent({ type: "mouseleave" });
+    await new Promise((r) => setTimeout(r, 1550));
+
+    assert.strictEqual(toast.style.opacity, "0", "Toast opacity set to 0 after mouseleave delay");
   });
 
   console.log(`\nStress test suite completed: ${passedTests}/${totalTests} tests passed.`);

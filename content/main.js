@@ -1,5 +1,5 @@
 // =============================================================================
-// YT Adjust — Main World Content Script (v2.3.5)
+// YT Adjust — Main World Content Script (v2.3.8)
 // =============================================================================
 // Runs in Chrome's MAIN execution world. Has direct access to YouTube's page
 // JS objects (such as #movie_player APIs) but CANNOT access chrome.* extension APIs.
@@ -694,11 +694,12 @@ let undoKeyHandler = null;
 let toastDismissTimer = null;
 
 /**
- * Dismisses the active skip notification toast and tears down the undo keyboard listener.
+ * Dismisses any active skip notification toast and tears down the undo keyboard listener.
  *
+ * @param {boolean} [immediate=false] - When true, immediately unmounts DOM nodes without fade animation
  * @returns {void}
  */
-function dismissSkipToast() {
+function dismissSkipToast(immediate = false) {
   if (undoKeyHandler) {
     document.removeEventListener("keydown", undoKeyHandler, true);
     undoKeyHandler = null;
@@ -707,11 +708,34 @@ function dismissSkipToast() {
     clearTimeout(toastDismissTimer);
     toastDismissTimer = null;
   }
-  const toast = document.getElementById("yt-adjust-toast");
-  if (toast) {
-    toast.style.opacity = "0";
-    setTimeout(() => toast.remove(), 200);
-  }
+
+  // Query all toast instances to clean up any stray or duplicate elements
+  const toasts = /** @type {NodeListOf<HTMLElement>} */ (
+    document.querySelectorAll("#yt-adjust-toast, .yt-adjust-toast")
+  );
+  if (toasts.length === 0) return;
+
+  toasts.forEach((toast) => {
+    // Immediately remove identity attributes so concurrent calls never match this element
+    toast.removeAttribute("id");
+    toast.removeAttribute("class");
+    toast.className = "";
+    if (toast.classList && typeof toast.classList.remove === "function") {
+      toast.classList.remove("yt-adjust-toast");
+    }
+    toast.style.pointerEvents = "none";
+
+    if (immediate) {
+      toast.remove();
+    } else {
+      toast.style.opacity = "0";
+      setTimeout(() => {
+        if (toast.parentNode) {
+          toast.remove();
+        }
+      }, 200);
+    }
+  });
 }
 
 /**
@@ -723,10 +747,12 @@ function dismissSkipToast() {
  * @returns {void}
  */
 function showSkipToast(message, undoTimestamp) {
-  dismissSkipToast();
+  // Synchronously wipe any existing toast instances to eliminate overlapping or orphaned elements
+  dismissSkipToast(true);
 
   const toast = document.createElement("div");
   toast.id = "yt-adjust-toast";
+  toast.className = "yt-adjust-toast";
 
   Object.assign(toast.style, {
     position: "absolute",
@@ -781,7 +807,7 @@ function showSkipToast(message, undoTimestamp) {
         video.currentTime = undoTimestamp;
         console.log(`[YT Adjust] Undo skip — seeking to ${undoTimestamp.toFixed(1)}s`);
       }
-      dismissSkipToast();
+      dismissSkipToast(true);
     });
 
     toast.appendChild(undoBtn);
@@ -803,11 +829,28 @@ function showSkipToast(message, undoTimestamp) {
         video.currentTime = undoTimestamp;
         console.log(`[YT Adjust] Undo skip via Enter key — seeking to ${undoTimestamp.toFixed(1)}s`);
       }
-      dismissSkipToast();
+      dismissSkipToast(true);
     };
 
     document.addEventListener("keydown", undoKeyHandler, true);
   }
+
+  // Pause auto-dismiss when hovering over the toast so the user can comfortably click Undo
+  toast.addEventListener("mouseenter", () => {
+    if (toastDismissTimer) {
+      clearTimeout(toastDismissTimer);
+      toastDismissTimer = null;
+    }
+  });
+
+  toast.addEventListener("mouseleave", () => {
+    if (toastDismissTimer) {
+      clearTimeout(toastDismissTimer);
+    }
+    toastDismissTimer = setTimeout(() => {
+      dismissSkipToast(false);
+    }, 1500);
+  });
 
   const player = getPlayer();
   if (player) {
@@ -820,7 +863,7 @@ function showSkipToast(message, undoTimestamp) {
     toast.style.opacity = "0.6";
   });
   toastDismissTimer = setTimeout(() => {
-    dismissSkipToast();
+    dismissSkipToast(false);
   }, TOAST_DURATION_MS);
 }
 
@@ -2735,7 +2778,7 @@ function init() {
  * @returns {void}
  */
 function onNavigate() {
-  dismissSkipToast();
+  dismissSkipToast(true);
   if (state.durationPollInterval) {
     clearInterval(state.durationPollInterval);
     state.durationPollInterval = null;
@@ -2812,4 +2855,4 @@ function sendToIsolated(type, payload) {
 
 // Fire initialization
 init();
-console.log("[YT Adjust] Main world script loaded (v2.3.7)");
+console.log("[YT Adjust] Main world script loaded (v2.3.8)");
