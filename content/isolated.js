@@ -323,9 +323,24 @@ async function fetchSegments(videoId, categories) {
   }
 
   // Check in-memory cache first to avoid redundant API queries
-  const cacheKey = `${videoId}:${[...categories].sort().join(",")}`;
+  const sortedCategories = [...categories].sort();
+  const cacheKey = `${videoId}:${sortedCategories.join(",")}`;
   if (segmentCache.has(cacheKey)) {
     return segmentCache.get(cacheKey) || [];
+  }
+
+  // If a superset of the requested categories is already cached for this videoId,
+  // filter it client-side in O(N) with zero network round-trips
+  const prefix = `${videoId}:`;
+  for (const [existingKey, existingSegments] of segmentCache.entries()) {
+    if (existingKey.startsWith(prefix) && Array.isArray(existingSegments)) {
+      const cachedCats = existingKey.slice(prefix.length).split(",");
+      if (sortedCategories.every((cat) => cachedCats.includes(cat))) {
+        const filtered = existingSegments.filter((s) => s && sortedCategories.includes(s.category));
+        setInSegmentCache(cacheKey, filtered);
+        return filtered;
+      }
+    }
   }
 
   // Reuse in-flight request Promise if an identical query is already awaiting network I/O
@@ -589,6 +604,27 @@ async function initialize() {
 // YouTube dispatches the custom event 'yt-navigate-finish' on document when a
 // client-side page transition completes. Listening to this event is the most
 // reliable mechanism to re-initialize extension logic on new videos.
+// YouTube dispatches 'yt-navigate-start' as soon as the user clicks a video link,
+// before the DOM transition completes. Prefetching SponsorBlock segments here overlaps
+// the SHA-256 hash and API lookup with YouTube's page load so 0.0s intro segments are ready.
+document.addEventListener("yt-navigate-start", async (e) => {
+  if (!isExtensionContextValid()) return;
+  try {
+    const detail = /** @type {any} */ (e) && /** @type {any} */ (e).detail;
+    const upcomingId = detail?.endpoint?.watchEndpoint?.videoId;
+    if (typeof upcomingId === "string" && upcomingId.length > 0) {
+      const settings = await getSettings();
+      if (
+        settings.sponsorblockEnabled &&
+        Array.isArray(settings.sponsorblockCategories) &&
+        settings.sponsorblockCategories.length > 0
+      ) {
+        fetchSegments(upcomingId, settings.sponsorblockCategories).catch(() => {});
+      }
+    }
+  } catch (_) {}
+});
+
 document.addEventListener("yt-navigate-finish", () => {
   if (!isExtensionContextValid()) return;
   // Reset current video ID so initialize() processes the new video cleanly
@@ -636,15 +672,11 @@ if (typeof chrome !== "undefined" && chrome?.storage?.onChanged) {
     sendToMain("SETTINGS_UPDATE", settings);
 
     // If SponsorBlock settings changed, re-query segments for the active video
+    // Note: segmentCache is keyed by `${videoId}:${sortedCategories}`, so previously
+    // fetched category combinations are served directly from memory without network I/O.
     const videoId = getVideoId();
     if (videoId && (changes.sponsorblockCategories || changes.sponsorblockEnabled)) {
       if (settings.sponsorblockEnabled && Array.isArray(settings.sponsorblockCategories) && settings.sponsorblockCategories.length > 0) {
-        // Invalidate stale cache entries for this video ID
-        for (const key of segmentCache.keys()) {
-          if (key.startsWith(videoId + ":")) {
-            segmentCache.delete(key);
-          }
-        }
         const segments = await fetchSegments(videoId, settings.sponsorblockCategories);
         const activeId = getVideoId();
         if (activeId && activeId !== videoId) return;
@@ -685,6 +717,21 @@ window.addEventListener("message", async (event) => {
   if (type === "REQUEST_SETTINGS") {
     const settings = await getSettings();
     sendToMain("SETTINGS_UPDATE", settings);
+  }
+
+  if (type === "PREFETCH_SEGMENTS") {
+    const safePayload = payload && typeof payload === "object" ? payload : {};
+    const videoId = typeof safePayload.videoId === "string" ? safePayload.videoId : "";
+    if (videoId) {
+      const settings = await getSettings();
+      if (
+        settings.sponsorblockEnabled &&
+        Array.isArray(settings.sponsorblockCategories) &&
+        settings.sponsorblockCategories.length > 0
+      ) {
+        fetchSegments(videoId, settings.sponsorblockCategories).catch(() => {});
+      }
+    }
   }
 
   if (type === "REQUEST_SEGMENTS") {

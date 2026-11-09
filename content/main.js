@@ -276,6 +276,11 @@ function getBoostGain() {
 // ---------------------------------------------------------------------------
 // Utility functions
 // ---------------------------------------------------------------------------
+/** @type {HTMLElement | null} */
+let _cachedYtdPlayer = null;
+/** @type {HTMLVideoElement | null} */
+let _cachedVideo = null;
+
 /**
  * Retrieves the YouTube player container element (#movie_player).
  * Cast to YouTubePlayerElement to expose custom methods.
@@ -289,32 +294,55 @@ function getPlayer() {
 /**
  * Returns the ytd-player custom element containing the actual video.
  * YouTube has multiple ytd-player elements (one is a preview/placeholder).
- * We always query for the ancestor of #movie_player.
+ * We always query for the ancestor of #movie_player and cache the connected element.
  *
  * @returns {HTMLElement | null}
  */
 function getYtdPlayer() {
   const moviePlayer = getPlayer();
-  if (!moviePlayer) return null;
-  return /** @type {HTMLElement | null} */ (moviePlayer.closest("ytd-player"));
+  if (!moviePlayer) {
+    _cachedYtdPlayer = null;
+    return null;
+  }
+  if (
+    _cachedYtdPlayer &&
+    _cachedYtdPlayer.isConnected !== false &&
+    _cachedYtdPlayer.parentElement &&
+    moviePlayer.closest("ytd-player") === _cachedYtdPlayer
+  ) {
+    return _cachedYtdPlayer;
+  }
+  _cachedYtdPlayer = /** @type {HTMLElement | null} */ (moviePlayer.closest("ytd-player"));
+  return _cachedYtdPlayer;
 }
 
 /**
  * Retrieves the active HTML5 video element within the YouTube player.
  * Cast to HTMLVideoElement to expose playback properties and frame callbacks.
+ * Uses a connected-node cache to avoid repeated querySelector traversals on every frame/scroll.
  *
  * @returns {HTMLVideoElement | null}
  */
 function getVideo() {
   const player = getPlayer();
+  if (
+    _cachedVideo &&
+    _cachedVideo.isConnected !== false &&
+    _cachedVideo.parentElement &&
+    (!player || _cachedVideo.closest("#movie_player") === player)
+  ) {
+    return _cachedVideo;
+  }
   if (!player) {
-    return /** @type {HTMLVideoElement | null} */ (
+    _cachedVideo = /** @type {HTMLVideoElement | null} */ (
       document.querySelector("video.html5-main-video") || document.querySelector("video")
     );
+    return _cachedVideo;
   }
-  return /** @type {HTMLVideoElement | null} */ (
+  _cachedVideo = /** @type {HTMLVideoElement | null} */ (
     player.querySelector("video.html5-main-video") || player.querySelector("video") || document.querySelector("video")
   );
+  return _cachedVideo;
 }
 
 /**
@@ -1059,9 +1087,11 @@ function renderSeekbarOverlay() {
       height: "150%",
       backgroundColor: "#fff",
       opacity: "0.35",
+      transform: "scaleY(1)",
+      willChange: "transform, opacity",
       pointerEvents: "none",
       borderRadius: "1px",
-      transition: "top 0.15s ease, height 0.15s ease, opacity 0.15s ease",
+      transition: "transform 0.15s ease, top 0.15s ease, height 0.15s ease, opacity 0.15s ease",
     });
 
     bar.dataset.category = segment.category;
@@ -1080,8 +1110,7 @@ function renderSeekbarOverlay() {
     progressBarContainer.addEventListener("mouseenter", () => {
       const bars = /** @type {NodeListOf<HTMLElement>} */ (document.querySelectorAll("#yt-adjust-seekbar-overlay > div"));
       bars.forEach((b) => {
-        b.style.top = "-50%";
-        b.style.height = "200%";
+        b.style.transform = "scaleY(1.33)";
         b.style.opacity = "0.85";
       });
     });
@@ -1089,8 +1118,7 @@ function renderSeekbarOverlay() {
     progressBarContainer.addEventListener("mouseleave", () => {
       const bars = /** @type {NodeListOf<HTMLElement>} */ (document.querySelectorAll("#yt-adjust-seekbar-overlay > div"));
       bars.forEach((b) => {
-        b.style.top = "-25%";
-        b.style.height = "150%";
+        b.style.transform = "scaleY(1)";
         b.style.opacity = "0.35";
       });
     });
@@ -4413,12 +4441,55 @@ function onDocumentVideoLoadedData(e) {
 }
 
 /**
+ * Attaches a native `onStateChange` listener on `#movie_player` so preferred quality
+ * is enforced immediately when a stream enters buffering (3), playing (1), or cued (5) state.
+ *
+ * @param {YouTubePlayerElement | null} player
+ * @returns {void}
+ */
+function bindPlayerQualityStateChange(player) {
+  if (!player || typeof player.addEventListener !== "function") return;
+  if (player.dataset && player.dataset.ytAdjustQualityStateBound === "true") return;
+  if (player.dataset) player.dataset.ytAdjustQualityStateBound = "true";
+  player.addEventListener("onStateChange", (playerState) => {
+    const code = typeof playerState === "number" ? playerState : Number(playerState);
+    if ((code === 1 || code === 3 || code === 5) && location.pathname === "/watch" && state.settings.qualityEnabled && !isAdPlaying()) {
+      applyQuality();
+    }
+  });
+}
+
+/**
+ * Prefetches SponsorBlock segments as soon as YouTube begins a client-side SPA navigation
+ * (`yt-navigate-start`), before DOM swap completes, so 0.0s intro segments are ready immediately.
+ *
+ * @param {any} e
+ * @returns {void}
+ */
+function onNavigateStart(e) {
+  try {
+    const upcomingVideoId =
+      e &&
+      e.detail &&
+      e.detail.endpoint &&
+      e.detail.endpoint.watchEndpoint &&
+      typeof e.detail.endpoint.watchEndpoint.videoId === "string"
+        ? e.detail.endpoint.watchEndpoint.videoId
+        : null;
+    if (upcomingVideoId && upcomingVideoId !== state.currentVideoId) {
+      sendToIsolated("PREFETCH_SEGMENTS", { videoId: upcomingVideoId });
+    }
+  } catch (_) {}
+}
+
+/**
  * Bootstraps the main world content script.
- * Registers yt-navigate-finish and initializes volume gesture listeners.
+ * Registers yt-navigate-start, yt-navigate-finish, and initializes volume gesture listeners.
  *
  * @returns {void}
  */
 function init() {
+  document.addEventListener("yt-navigate-start", onNavigateStart);
   document.addEventListener("yt-navigate-finish", onNavigate);
   document.addEventListener("yt-player-updated", onYtPlayerUpdated, true);
   document.addEventListener("loadeddata", onDocumentVideoLoadedData, true);
@@ -4436,6 +4507,8 @@ function init() {
  * @returns {void}
  */
 function onNavigate() {
+  _cachedYtdPlayer = null;
+  _cachedVideo = null;
   dismissSkipToast(true);
   dismissPremiumModal();
   if (state.durationPollInterval) {
@@ -4475,8 +4548,14 @@ function onNavigate() {
   state._pendingPlayAnnouncement = false;
   deactivateMiniPlayer();
 
+  const player = getPlayer();
+  bindPlayerQualityStateChange(player);
   if (state.settings.qualityEnabled) {
-    state.qualityRetryTimer = setTimeout(applyQuality, 1500);
+    if (player && typeof player.getAvailableQualityLevels === "function") {
+      applyQuality();
+    } else {
+      state.qualityRetryTimer = setTimeout(applyQuality, 600);
+    }
   }
 
   const videoId = new URLSearchParams(location.search).get("v");
