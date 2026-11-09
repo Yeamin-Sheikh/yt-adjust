@@ -1,5 +1,5 @@
 // =============================================================================
-// YT Adjust — Main World Content Script (v2.4.3)
+// YT Adjust — Main World Content Script (v2.4.4)
 // =============================================================================
 // Runs in Chrome's MAIN execution world. Has direct access to YouTube's page
 // JS objects (such as #movie_player APIs) but CANNOT access chrome.* extension APIs.
@@ -2218,6 +2218,270 @@ function updateBoostButtonState(active) {
 
 let miniPlayerScrollBound = false;
 let isInternalResizeDispatch = false;
+let isRestoringSizeButton = false;
+
+/**
+ * Checks whether YouTube's watch page is currently in Theater Mode ("Creator Mode").
+ * Inspects `ytd-watch-flexy[theater]` and checks whether `ytd-player` resides inside
+ * the full-bleed theater container rather than the standard `#player` column container.
+ *
+ * @returns {boolean}
+ */
+function isTheaterModeActive() {
+  const watchFlexy = document.querySelector("ytd-watch-flexy");
+  if (watchFlexy && typeof watchFlexy.hasAttribute === "function") {
+    if (watchFlexy.hasAttribute("theater")) return true;
+  }
+  const ytdPlayer = getYtdPlayer();
+  if (!ytdPlayer) return false;
+  const player = document.querySelector("#player");
+  const fullBleed =
+    document.querySelector("#full-bleed-container") ||
+    document.querySelector("#player-full-bleed-container") ||
+    document.querySelector("#player-theater-container");
+  if (
+    fullBleed &&
+    typeof fullBleed.contains === "function" &&
+    fullBleed.contains(ytdPlayer) &&
+    !(player && typeof player.contains === "function" && player.contains(ytdPlayer))
+  ) {
+    return true;
+  }
+  return false;
+}
+
+/**
+ * Ensures YouTube's native Theater Mode / Default View toggle button (`.ytp-size-button`)
+ * remains visible and synchronized in the bottom-right control bar across both Default View
+ * and Theater Mode ("Creator Mode").
+ *
+ * Prevents `.ytp-size-button` from disappearing when entering Theater Mode or after exiting
+ * Picture-in-Picture (`setSizeStyle(true, isTheater)`), and guarantees that clicking the
+ * button always toggles Theater Mode cleanly without requiring the `T` keyboard shortcut.
+ *
+ * @returns {void}
+ */
+function ensureSizeButtonVisible() {
+  if (isRestoringSizeButton) return;
+  const player = getPlayer();
+  if (!player) return;
+
+  const anyPlayer = /** @type {any} */ (player);
+
+  // 1. Wrap moviePlayer.setSizeStyle(showSizeButton, isTheater) once per player instance
+  // so YouTube or internal callers never pass showSizeButton=false on watch pages.
+  if (typeof anyPlayer.setSizeStyle === "function" && !anyPlayer._ytAdjustSizeStyleWrapped) {
+    const origSetSizeStyle = anyPlayer.setSizeStyle;
+    anyPlayer._ytAdjustSizeStyleWrapped = true;
+    /**
+     * @this {any}
+     * @param {boolean} [showSizeButton]
+     * @param {boolean} [isTheater]
+     */
+    anyPlayer.setSizeStyle = function (showSizeButton, isTheater) {
+      const onWatch = typeof location !== "undefined" && location.pathname === "/watch";
+      const allowForceShow = onWatch && !state.miniPlayerActive && !document.fullscreenElement;
+      const effectiveShow = allowForceShow ? true : Boolean(showSizeButton);
+      const effectiveTheater = typeof isTheater === "boolean" ? isTheater : isTheaterModeActive();
+      return origSetSizeStyle.call(this, effectiveShow, effectiveTheater);
+    };
+  }
+
+  const sizeBtn = /** @type {HTMLElement | null} */ (
+    typeof player.querySelector === "function" ? player.querySelector(".ytp-size-button") : null
+  );
+
+  // Do not force the size button visible while in fullscreen or floating mini-player
+  if (location.pathname !== "/watch" || state.miniPlayerActive || document.fullscreenElement) {
+    if (sizeBtn && sizeBtn.dataset && sizeBtn.dataset.ytAdjustForcedDisplay === "true") {
+      isRestoringSizeButton = true;
+      try {
+        sizeBtn.style.display = "";
+        delete sizeBtn.dataset.ytAdjustForcedDisplay;
+      } finally {
+        isRestoringSizeButton = false;
+      }
+    }
+    return;
+  }
+
+  isRestoringSizeButton = true;
+  try {
+    const isTheater = isTheaterModeActive();
+    if (typeof anyPlayer.setSizeStyle === "function") {
+      try {
+        anyPlayer.setSizeStyle(true, isTheater);
+      } catch (_) {}
+    }
+
+    if (!sizeBtn) return;
+
+    if (typeof sizeBtn.removeAttribute === "function") {
+      sizeBtn.removeAttribute("hidden");
+      if (sizeBtn.getAttribute("aria-hidden") === "true") {
+        sizeBtn.removeAttribute("aria-hidden");
+      }
+    }
+    if ("disabled" in sizeBtn && /** @type {HTMLButtonElement} */ (sizeBtn).disabled) {
+      /** @type {HTMLButtonElement} */ (sizeBtn).disabled = false;
+    }
+
+    if (sizeBtn.style && sizeBtn.style.display === "none") {
+      sizeBtn.style.display = "";
+    }
+
+    // If a YouTube stylesheet rule still hides .ytp-size-button in Theater Mode,
+    // match the computed display of the adjacent .ytp-fullscreen-button / .ytp-settings-button.
+    if (typeof window !== "undefined" && typeof window.getComputedStyle === "function") {
+      const computed = window.getComputedStyle(sizeBtn);
+      if (computed && computed.display === "none") {
+        const refBtn = /** @type {HTMLElement | null} */ (
+          player.querySelector(".ytp-fullscreen-button") || player.querySelector(".ytp-settings-button")
+        );
+        const refDisplay = refBtn ? window.getComputedStyle(refBtn).display : "";
+        const targetDisplay = refDisplay && refDisplay !== "none" ? refDisplay : "inline-block";
+        if (typeof sizeBtn.style.setProperty === "function") {
+          sizeBtn.style.setProperty("display", targetDisplay, "important");
+        } else {
+          sizeBtn.style.display = targetDisplay;
+        }
+        if (sizeBtn.dataset) {
+          sizeBtn.dataset.ytAdjustForcedDisplay = "true";
+        }
+      }
+    }
+
+    // Bind MutationObserver and click fallback once per .ytp-size-button element
+    if (sizeBtn.dataset && sizeBtn.dataset.ytAdjustSizeBtnBound !== "true") {
+      sizeBtn.dataset.ytAdjustSizeBtnBound = "true";
+
+      if (typeof MutationObserver === "function") {
+        const obs = new MutationObserver(() => {
+          if (
+            !isRestoringSizeButton &&
+            location.pathname === "/watch" &&
+            !state.miniPlayerActive &&
+            !document.fullscreenElement
+          ) {
+            if (
+              sizeBtn.style?.display === "none" ||
+              (typeof sizeBtn.hasAttribute === "function" && sizeBtn.hasAttribute("hidden"))
+            ) {
+              ensureSizeButtonVisible();
+            }
+          }
+        });
+        obs.observe(sizeBtn, { attributes: true, attributeFilter: ["style", "hidden", "class"] });
+      }
+
+      let theaterBeforeClick = false;
+      let lastSyncTime = 0;
+      const syncBeforeClick = () => {
+        lastSyncTime = Date.now();
+        theaterBeforeClick = isTheaterModeActive();
+        const mp = /** @type {any} */ (getPlayer());
+        if (mp && typeof mp.setSizeStyle === "function") {
+          try {
+            mp.setSizeStyle(true, theaterBeforeClick);
+          } catch (_) {}
+        }
+      };
+
+      if (typeof player.addEventListener === "function") {
+        player.addEventListener(
+          "click",
+          (e) => {
+            const t = e && e.target instanceof Element ? e.target : null;
+            if (t && (t === sizeBtn || (typeof sizeBtn.contains === "function" && sizeBtn.contains(t)))) {
+              if (Date.now() - lastSyncTime > 300) {
+                syncBeforeClick();
+              }
+            }
+          },
+          true
+        );
+      }
+      sizeBtn.addEventListener("pointerdown", syncBeforeClick, true);
+      sizeBtn.addEventListener("mousedown", syncBeforeClick, true);
+      sizeBtn.addEventListener(
+        "click",
+        () => {
+          if (Date.now() - lastSyncTime > 300) {
+            syncBeforeClick();
+          }
+          setTimeout(() => {
+            if (location.pathname !== "/watch" || document.fullscreenElement) return;
+            const theaterAfterClick = isTheaterModeActive();
+            if (theaterAfterClick === theaterBeforeClick) {
+              // Fallback: if YouTube's native click handler ignored the button click
+              // (e.g. when YouTube tried to hide the button in Theater Mode), trigger the toggle explicitly
+              const targetTheater = !theaterBeforeClick;
+              const watchFlexy = document.querySelector("ytd-watch-flexy");
+              const mp = getPlayer();
+              try {
+                const evt = new CustomEvent("yt-set-theater-mode-enabled", {
+                  detail: { enabled: targetTheater },
+                  bubbles: true,
+                  composed: true,
+                });
+                if (mp && typeof mp.dispatchEvent === "function") {
+                  mp.dispatchEvent(evt);
+                } else if (watchFlexy && typeof watchFlexy.dispatchEvent === "function") {
+                  watchFlexy.dispatchEvent(evt);
+                } else {
+                  document.dispatchEvent(evt);
+                }
+              } catch (_) {}
+
+              if (isTheaterModeActive() === theaterBeforeClick) {
+                try {
+                  const keyEvt = new KeyboardEvent("keydown", {
+                    key: "t",
+                    code: "KeyT",
+                    keyCode: 84,
+                    which: 84,
+                    bubbles: true,
+                    cancelable: true,
+                    composed: true,
+                  });
+                  const keyTarget = mp || watchFlexy || document.body || document;
+                  if (keyTarget && typeof keyTarget.dispatchEvent === "function") {
+                    keyTarget.dispatchEvent(keyEvt);
+                  }
+                } catch (_) {}
+              }
+            }
+            ensureSizeButtonVisible();
+          }, 0);
+        },
+        false
+      );
+    }
+  } finally {
+    isRestoringSizeButton = false;
+  }
+}
+
+/**
+ * Observes `ytd-watch-flexy` attribute changes (`theater`, `full-bleed-player`) so `.ytp-size-button`
+ * remains visible and synchronized whenever the user enters or exits Theater Mode ("Creator Mode").
+ *
+ * @returns {void}
+ */
+function bindWatchFlexyTheaterObserver() {
+  const watchFlexy = /** @type {HTMLElement | null} */ (document.querySelector("ytd-watch-flexy"));
+  if (!watchFlexy || !watchFlexy.dataset) return;
+  if (watchFlexy.dataset.ytAdjustTheaterObsBound === "true") return;
+  watchFlexy.dataset.ytAdjustTheaterObsBound = "true";
+  if (typeof MutationObserver === "function") {
+    const obs = new MutationObserver(() => {
+      syncMiniPlayerTheaterToggle();
+      ensureSizeButtonVisible();
+      setTimeout(ensureSizeButtonVisible, 60);
+    });
+    obs.observe(watchFlexy, { attributes: true, attributeFilter: ["theater", "full-bleed-player"] });
+  }
+}
 
 /**
  * Deactivates the floating mini-player immediately when entering native fullscreen.
@@ -2228,6 +2492,7 @@ function onMiniPlayerFullscreenChange() {
   if (document.fullscreenElement && state.miniPlayerActive) {
     deactivateMiniPlayer();
   }
+  ensureSizeButtonVisible();
 }
 
 /**
@@ -2485,6 +2750,9 @@ function syncMiniPlayerTheaterToggle(ytdPlayerArg) {
  */
 function onMiniPlayerTheaterToggle() {
   syncMiniPlayerTheaterToggle();
+  ensureSizeButtonVisible();
+  setTimeout(ensureSizeButtonVisible, 60);
+  setTimeout(ensureSizeButtonVisible, 200);
 }
 
 /**
@@ -2951,6 +3219,7 @@ function activateMiniPlayer() {
   }
 
   state.miniPlayerActive = true;
+  ensureSizeButtonVisible();
   console.log("[YT Adjust] Mini-player activated");
 }
 
@@ -3182,6 +3451,7 @@ function deactivateMiniPlayer() {
 
   const closeBtn = document.getElementById("yt-adjust-mp-close");
   if (closeBtn) closeBtn.remove();
+  ensureSizeButtonVisible();
 }
 
 /**
@@ -3755,8 +4025,8 @@ function forceExitYouTubePipState() {
   if (typeof anyPlayer.wakeUpControls === "function") {
     try { anyPlayer.wakeUpControls(); } catch (e) {}
   }
-  if (!state.miniPlayerActive && typeof anyPlayer.setSizeStyle === "function") {
-    try { anyPlayer.setSizeStyle(false, false); } catch (e) {}
+  if (!state.miniPlayerActive) {
+    ensureSizeButtonVisible();
   }
 }
 
@@ -4493,6 +4763,7 @@ function init() {
   document.addEventListener("yt-navigate-finish", onNavigate);
   document.addEventListener("yt-player-updated", onYtPlayerUpdated, true);
   document.addEventListener("loadeddata", onDocumentVideoLoadedData, true);
+  document.addEventListener("yt-set-theater-mode-enabled", onMiniPlayerTheaterToggle, true);
   onNavigate();
   sendToIsolated("REQUEST_SETTINGS", {});
   setupVolumeGesture();
@@ -4588,6 +4859,8 @@ function onNavigate() {
   if (state.settings.volumeBoostEnabled) setupVolumeBoost();
   setupMiniPlayer();
   setupPictureInPicture();
+  bindWatchFlexyTheaterObserver();
+  ensureSizeButtonVisible();
 
   // Follow-up pass after 600ms to catch late-hydrated controls on fresh page loads
   state._navInitTimer = setTimeout(() => {
@@ -4601,6 +4874,8 @@ function onNavigate() {
     if (state.settings.volumeBoostEnabled) setupVolumeBoost();
     setupMiniPlayer();
     setupPictureInPicture();
+    bindWatchFlexyTheaterObserver();
+    ensureSizeButtonVisible();
   }, 600);
 }
 
@@ -4620,4 +4895,4 @@ function sendToIsolated(type, payload) {
 
 // Fire initialization
 init();
-console.log("[YT Adjust] Main world script loaded (v2.4.3)");
+console.log("[YT Adjust] Main world script loaded (v2.4.4)");

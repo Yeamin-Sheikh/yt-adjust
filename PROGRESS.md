@@ -10,7 +10,7 @@
 
 - **Phase:** Active development and hardening
 - **Progress:** 41/41 tasks complete (100%)
-- **Active task:** v2.4.3 runtime optimizations (instant `onStateChange` quality lock, `yt-navigate-start` SponsorBlock prefetching, superset category cache filtering, DOM reference caching, and compositor-thread seekbar marker hover) complete
+- **Active task:** v2.4.4 Creator Mode (`.ytp-size-button`) visibility & toggle synchronization (`ensureSizeButtonVisible`, `isTheaterModeActive`, `setSizeStyle(true, isTheater)`) complete
 - **Blockers:** None
 
 ---

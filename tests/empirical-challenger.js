@@ -3245,6 +3245,52 @@ async function runTestAsync(name, fn) {
     assert.strictEqual(video.currentTime, 95, "Updates video.currentTime to 95s");
   });
 
+  runTest("Creator Mode (Theater Mode) size button: stays visible in Theater Mode and after PiP exit", () => {
+    const env = createDomEnvironment();
+    const ctx = loadMainJsInContext(env, true);
+
+    const watchFlexy = env.document.createElement("ytd-watch-flexy");
+    watchFlexy.setAttribute("theater", "");
+    const fullBleed = env.document.createElement("div");
+    fullBleed.id = "full-bleed-container";
+    const ytdPlayer = env.document.createElement("ytd-player");
+    const player = env.document.createElement("div");
+    player.id = "movie_player";
+    const sizeBtn = env.document.createElement("button");
+    sizeBtn.className = "ytp-size-button ytp-button";
+    sizeBtn.style.display = "none";
+
+    let lastShowSizeBtn = null;
+    let lastIsTheater = null;
+    player.setSizeStyle = (showSizeButton, isTheater) => {
+      lastShowSizeBtn = showSizeButton;
+      lastIsTheater = isTheater;
+      sizeBtn.style.display = showSizeButton ? "" : "none";
+    };
+
+    const video = env.document.createElement("video");
+    video.className = "html5-main-video";
+    player.appendChild(video);
+    player.appendChild(sizeBtn);
+    ytdPlayer.appendChild(player);
+    fullBleed.appendChild(ytdPlayer);
+    watchFlexy.appendChild(fullBleed);
+    env.document.body.appendChild(watchFlexy);
+    env.elements.set("movie_player", player);
+    env.elements.set("full-bleed-container", fullBleed);
+
+    // 1. Exiting PiP while in Creator Mode must call setSizeStyle(true, true) and keep .ytp-size-button visible
+    ctx.forceExitYouTubePipState();
+    assert.strictEqual(lastShowSizeBtn, true, "forceExitYouTubePipState passes showSizeButton=true");
+    assert.strictEqual(lastIsTheater, true, "forceExitYouTubePipState passes isTheater=true in Creator Mode");
+    assert.strictEqual(sizeBtn.style.display, "", ".ytp-size-button is visible in Creator Mode");
+
+    // 2. If YouTube internally calls player.setSizeStyle(false, true) when opening Creator Mode, wrapper forces showSizeButton=true
+    player.setSizeStyle(false, true);
+    assert.strictEqual(lastShowSizeBtn, true, "Wrapped setSizeStyle overrides false -> true on watch page");
+    assert.strictEqual(sizeBtn.style.display, "", ".ytp-size-button remains visible after setSizeStyle(false, true)");
+  });
+
   console.log(`\nStress test suite completed: ${passedTests}/${totalTests} tests passed.`);
   if (passedTests === totalTests) {
     console.log("ALL TESTS PASSED SUCCESSFULLY.");

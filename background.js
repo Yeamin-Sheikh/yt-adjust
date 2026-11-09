@@ -1,5 +1,5 @@
 // =============================================================================
-// YT Adjust — Background Service Worker (v2.4.3)
+// YT Adjust — Background Service Worker (v2.4.4)
 // =============================================================================
 // Why this worker exists:
 // In Manifest V3, content scripts (content/isolated.js) execute inside the
