@@ -3,9 +3,9 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/Yeamin-Sheikh/yt-adjust/releases/tag/v2.4.4"><img src="https://img.shields.io/badge/version-2.4.4-FF0000?style=for-the-badge&logo=youtube&logoColor=white" alt="Version 2.4.4"></a>
+  <a href="https://github.com/Yeamin-Sheikh/yt-adjust/releases/tag/v2.4.5"><img src="https://img.shields.io/badge/version-2.4.5-FF0000?style=for-the-badge&logo=youtube&logoColor=white" alt="Version 2.4.5"></a>
   <a href="https://developer.chrome.com/docs/extensions/mv3/intro/"><img src="https://img.shields.io/badge/Manifest-V3-10b981?style=for-the-badge&logo=googlechrome&logoColor=white" alt="Manifest V3"></a>
-  <img src="https://img.shields.io/badge/tests-108%20passing-38bdf8?style=for-the-badge&logo=checkmarx&logoColor=white" alt="108 Passing Tests">
+  <img src="https://img.shields.io/badge/tests-109%20passing-38bdf8?style=for-the-badge&logo=checkmarx&logoColor=white" alt="109 Passing Tests">
   <img src="https://img.shields.io/badge/Chromium-Supported-f59e0b?style=for-the-badge&logo=googlechrome&logoColor=white" alt="Chromium Supported">
   <img src="https://img.shields.io/badge/license-MIT-8b5cf6?style=for-the-badge" alt="MIT License">
 </p>
@@ -16,8 +16,8 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/Yeamin-Sheikh/yt-adjust/releases/download/v2.4.4/yt-adjust-v2.4.4.zip">
-    <img src="https://img.shields.io/badge/Download_Extension_ZIP-v2.4.4-d90429?style=for-the-badge&logo=zip&logoColor=white" alt="Download ZIP">
+  <a href="https://github.com/Yeamin-Sheikh/yt-adjust/releases/download/v2.4.5/yt-adjust-v2.4.5.zip">
+    <img src="https://img.shields.io/badge/Download_Extension_ZIP-v2.4.5-d90429?style=for-the-badge&logo=zip&logoColor=white" alt="Download ZIP">
   </a>
 </p>
 
@@ -54,7 +54,7 @@
 | Right-click + Scroll | Smooth volume adjustment (default 5% per tick) |
 | <kbd>Shift</kbd> + Scroll | Smooth playback speed adjustment (0.25x to 4.0x) |
 | Hover speed button + Scroll | Scroll directly over player speed button to adjust speed |
-| Click speed button | Instantly reset playback rate back to 1.0x |
+| Click speed button | Cycle playback rate in +0.25x steps up to 3.0x, then reset to 1.0x |
 | Click `((?))` boost button | Toggle 150% audio amplification |
 | <kbd>Enter</kbd> during skip toast | Instantly undo SponsorBlock skip and jump back |
 
@@ -64,7 +64,7 @@
 
 ### Option 1: Load pre-built release ZIP (recommended)
 
-1. Download **[yt-adjust-v2.4.4.zip](https://github.com/Yeamin-Sheikh/yt-adjust/releases/download/v2.4.4/yt-adjust-v2.4.4.zip)** from the releases page.
+1. Download **[yt-adjust-v2.4.5.zip](https://github.com/Yeamin-Sheikh/yt-adjust/releases/download/v2.4.5/yt-adjust-v2.4.5.zip)** from the releases page.
 2. Extract the archive into a folder on your computer.
 3. Open your Chromium browser (Chrome, Helium, Brave, Edge, Opera) and navigate to `chrome://extensions` (or `helium://extensions`).
 4. Toggle **Developer mode** in the top-right corner.
@@ -148,7 +148,7 @@ npm run typecheck
 # Syntax validation across all scripts
 npm run lint:syntax
 
-# Run full empirical and adversarial test suite (108 tests)
+# Run full empirical and adversarial test suite (109 tests)
 npm test
 ```
 
@@ -177,7 +177,7 @@ yt-adjust/
 +-- types/
 ¦   +-- extension.d.ts             # TypeScript declarations for Chrome & YouTube APIs
 +-- background.js                  # MV3 Service Worker: cross-origin SponsorBlock API proxy
-+-- manifest.json                  # Manifest V3 configuration (v2.4.4)
++-- manifest.json                  # Manifest V3 configuration (v2.4.5)
 +-- package.json
 +-- tsconfig.json
 +-- .gitignore

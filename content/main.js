@@ -1,5 +1,5 @@
 // =============================================================================
-// YT Adjust — Main World Content Script (v2.4.4)
+// YT Adjust — Main World Content Script (v2.4.5)
 // =============================================================================
 // Runs in Chrome's MAIN execution world. Has direct access to YouTube's page
 // JS objects (such as #movie_player APIs) but CANNOT access chrome.* extension APIs.
@@ -1825,8 +1825,9 @@ function bindSpeedVideo(video) {
 }
 
 /**
- * Injects a speed indicator and reset button into YouTube's player control bar.
- * Clicking resets speed to 1.0x. Scrolling over the button adjusts speed.
+ * Injects a speed indicator and cycle button into YouTube's player control bar.
+ * Clicking increments speed by +0.25x up to 3.0x, then resets to 1.0x.
+ * Scrolling over the button (or Shift+Scroll) adjusts speed across 0.25x to 4.0x.
  *
  * @returns {void}
  */
@@ -1941,14 +1942,28 @@ function injectSpeedButton() {
 
   btn.addEventListener("click", () => {
     const video = getVideo();
-    state.customPlaybackRate = 1.0;
+    const current =
+      video && typeof video.playbackRate === "number" && Number.isFinite(video.playbackRate) && video.playbackRate > 0
+        ? video.playbackRate
+        : state.customPlaybackRate || 1.0;
+
+    // Clicking increments speed by +0.25x up to 3.0x.
+    // Once at or above 3.0x, clicking resets back to normal (1.0x).
+    // Speeds above 3.0x (up to 4.0x) can only be reached via scroll wheel.
+    const nextSpeed =
+      current >= 3.0 - 0.001
+        ? 1.0
+        : Math.min(3.0, Math.round((current + 0.25) * 100) / 100);
+
+    state.customPlaybackRate = nextSpeed;
     state._speedmasterRestoreRate = 0;
     if (video) {
-      video.defaultPlaybackRate = 1.0;
-      video.playbackRate = 1.0;
-      showSpeedOverlay(1.0);
+      bindSpeedVideo(video);
+      video.defaultPlaybackRate = nextSpeed;
+      video.playbackRate = nextSpeed;
+      showSpeedOverlay(nextSpeed);
     }
-    updateSpeedButton(1.0);
+    updateSpeedButton(nextSpeed);
   });
 
   rightControlsLeft.insertBefore(btn, settingsBtn);
@@ -4895,4 +4910,4 @@ function sendToIsolated(type, payload) {
 
 // Fire initialization
 init();
-console.log("[YT Adjust] Main world script loaded (v2.4.4)");
+console.log("[YT Adjust] Main world script loaded (v2.4.5)");

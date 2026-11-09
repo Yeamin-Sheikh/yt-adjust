@@ -1053,15 +1053,15 @@ test("popup.js: saveSetting mirrors writes to both chrome.storage.sync and chrom
   assert.equal(localSaved.quality, "highres", "mirrored to chrome.storage.local for Helium parity");
 });
 
-test("Cross-file parity: version string (2.4.4) and default settings match across all files with zero discrepancy", () => {
+test("Cross-file parity: version string (2.4.5) and default settings match across all files with zero discrepancy", () => {
   const manifest = JSON.parse(fs.readFileSync(path.join(rootDir, "manifest.json"), "utf8"));
   const pkg = JSON.parse(fs.readFileSync(path.join(rootDir, "package.json"), "utf8"));
   const pkgLock = JSON.parse(fs.readFileSync(path.join(rootDir, "package-lock.json"), "utf8"));
   const popupHtml = fs.readFileSync(path.join(rootDir, "popup/popup.html"), "utf8");
 
-  assert.equal(manifest.version, "2.4.4");
-  assert.equal(pkg.version, "2.4.4");
-  assert.equal(pkgLock.version, "2.4.4");
+  assert.equal(manifest.version, "2.4.5");
+  assert.equal(pkg.version, "2.4.5");
+  assert.equal(pkgLock.version, "2.4.5");
   assert.ok(popupHtml.includes(`>v${manifest.version}<`), "popup.html version badge matches manifest.version");
   assert.ok(popupCode.includes(`(v${manifest.version})`), "popup.js header matches manifest.version");
   assert.ok(isolatedCode.includes(`(v${manifest.version})`), "isolated.js version matches manifest.version");

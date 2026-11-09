@@ -3291,6 +3291,47 @@ async function runTestAsync(name, fn) {
     assert.strictEqual(sizeBtn.style.display, "", ".ytp-size-button remains visible after setSizeStyle(false, true)");
   });
 
+  runTest("Speed button click cycling: increments by +0.25x up to 3.0x then resets to 1.0x", () => {
+    const env = createDomEnvironment();
+    const ctx = loadMainJsInContext(env, true);
+
+    const player = env.document.createElement("div");
+    player.id = "movie_player";
+    const rightControlsLeft = env.document.createElement("div");
+    rightControlsLeft.className = "ytp-right-controls-left";
+    const settingsBtn = env.document.createElement("button");
+    settingsBtn.className = "ytp-settings-button";
+    rightControlsLeft.appendChild(settingsBtn);
+
+    const video = env.document.createElement("video");
+    video.className = "html5-main-video";
+    video.playbackRate = 1.0;
+
+    player.appendChild(video);
+    player.appendChild(rightControlsLeft);
+    env.document.body.appendChild(player);
+    env.elements.set("movie_player", player);
+
+    ctx.injectSpeedButton();
+    const speedBtn = env.document.getElementById("yt-adjust-speed-btn");
+    const badge = env.document.getElementById("yt-adjust-speed-badge");
+    assert.ok(speedBtn, "Speed button injected");
+
+    const expectedProgression = [1.25, 1.5, 1.75, 2.0, 2.25, 2.5, 2.75, 3.0, 1.0];
+    for (const expected of expectedProgression) {
+      speedBtn.click();
+      assert.strictEqual(video.playbackRate, expected, `Click advanced playbackRate to ${expected}x`);
+      assert.strictEqual(ctx.state.customPlaybackRate, expected, `customPlaybackRate synced to ${expected}x`);
+    }
+    assert.strictEqual(badge.style.display, "none", "Badge hidden when cycled back to 1.0x");
+
+    // If user scrolled above 3.0x (e.g. 3.5x), clicking must reset to 1.0x and never increase further
+    video.playbackRate = 3.5;
+    ctx.state.customPlaybackRate = 3.5;
+    speedBtn.click();
+    assert.strictEqual(video.playbackRate, 1.0, "Click at 3.5x resets to 1.0x without increasing above 3x");
+  });
+
   console.log(`\nStress test suite completed: ${passedTests}/${totalTests} tests passed.`);
   if (passedTests === totalTests) {
     console.log("ALL TESTS PASSED SUCCESSFULLY.");

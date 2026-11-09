@@ -10,7 +10,7 @@
 
 - **Phase:** Active development and hardening
 - **Progress:** 41/41 tasks complete (100%)
-- **Active task:** v2.4.4 Creator Mode (`.ytp-size-button`) visibility & toggle synchronization (`ensureSizeButtonVisible`, `isTheaterModeActive`, `setSizeStyle(true, isTheater)`) complete
+- **Active task:** v2.4.5 speed button click-cycling (+0.25x steps from 1.0x up to 3.0x, resetting to 1.0x at 3.0x while keeping >3.0x scroll-only) complete
 - **Blockers:** None
 
 ---
