@@ -2876,7 +2876,7 @@ async function runTestAsync(name, fn) {
     assert.strictEqual(fullBleed.style.minHeight, "695px", "Applied clamped 695px minHeight to #full-bleed-container");
   });
 
-  runTest("Color-coded seekbar markers & Configurable Volume Boost (150% / 200% / 300%)", () => {
+  runTest("Monotone seekbar markers & Configurable Volume Boost (150% / 200% / 300%)", () => {
     const env = createDomEnvironment();
     const ctx = loadMainJsInContext(env, true);
 
@@ -2902,9 +2902,10 @@ async function runTestAsync(name, fn) {
 
     const overlay = env.document.getElementById("yt-adjust-seekbar-overlay");
     assert.ok(overlay, "Seekbar overlay mounted");
-    assert.strictEqual(overlay.children[0].style.backgroundColor, "#00d400", "Sponsor marker colored #00d400");
+    assert.strictEqual(overlay.children[0].style.backgroundColor, "#fff", "Sponsor marker uses monotone #fff");
+    assert.strictEqual(overlay.children[0].style.opacity, "0.35", "Sponsor marker uses 0.35 resting opacity");
     assert.strictEqual(overlay.children[0].title, "Sponsor (20s)", "Sponsor marker has tooltip title");
-    assert.strictEqual(overlay.children[1].style.backgroundColor, "#ffff00", "Self-promo marker colored #ffff00");
+    assert.strictEqual(overlay.children[1].style.backgroundColor, "#fff", "Self-promo marker uses monotone #fff");
 
     // Configurable Volume Boost: switch to 200% (2.0) and 300% (3.0)
     ctx.state.settings.volumeBoostLevel = 2;

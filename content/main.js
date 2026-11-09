@@ -247,7 +247,7 @@ const STORAGE_QUALITY_HEIGHT = {
   tiny: 144,
 };
 
-// SponsorBlock category display info and official seekbar marker colors
+// SponsorBlock category display info
 /** @type {Record<string, string>} */
 const CATEGORY_LABELS = {
   sponsor: "Sponsor",
@@ -258,18 +258,6 @@ const CATEGORY_LABELS = {
   preview: "Preview",
   filler: "Filler",
   music_offtopic: "Music",
-};
-
-/** @type {Record<string, string>} */
-const CATEGORY_COLORS = {
-  sponsor: "#00d400",
-  selfpromo: "#ffff00",
-  interaction: "#cc00ff",
-  intro: "#00ffff",
-  outro: "#0202ed",
-  preview: "#008fd6",
-  filler: "#7300ff",
-  music_offtopic: "#ff9900",
 };
 
 /**
@@ -1059,7 +1047,6 @@ function renderSeekbarOverlay() {
     const [start, end] = segment.segment;
     const leftPercent = Math.max(0, Math.min(100, (start / duration) * 100));
     const widthPercent = Math.max(0, Math.min(100 - leftPercent, ((end - start) / duration) * 100));
-    const barColor = CATEGORY_COLORS[segment.category] || "#ffffff";
     const catLabel = CATEGORY_LABELS[segment.category] || segment.category;
 
     const bar = document.createElement("div");
@@ -1070,8 +1057,8 @@ function renderSeekbarOverlay() {
       minWidth: "2px",
       top: "-25%",
       height: "150%",
-      backgroundColor: barColor,
-      opacity: "0.65",
+      backgroundColor: "#fff",
+      opacity: "0.35",
       pointerEvents: "none",
       borderRadius: "1px",
       transition: "top 0.15s ease, height 0.15s ease, opacity 0.15s ease",
@@ -1095,7 +1082,7 @@ function renderSeekbarOverlay() {
       bars.forEach((b) => {
         b.style.top = "-50%";
         b.style.height = "200%";
-        b.style.opacity = "0.9";
+        b.style.opacity = "0.85";
       });
     });
 
@@ -1104,7 +1091,7 @@ function renderSeekbarOverlay() {
       bars.forEach((b) => {
         b.style.top = "-25%";
         b.style.height = "150%";
-        b.style.opacity = "0.65";
+        b.style.opacity = "0.35";
       });
     });
   }
