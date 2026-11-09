@@ -53,6 +53,7 @@
  * @property {HTMLVideoElement | null} [_segmentMonitorVideo] - Video element bound to active segment monitor
  * @property {any} durationPollInterval - Interval handle for seekbar overlay duration polling
  * @property {number} qualityRetryCount - Counter for quality automation retry attempts
+ * @property {boolean} [_qualityLockedForVideo] - True once preferred quality has been locked for the active video stream
  * @property {any} qualityRetryTimer - Timer handle for scheduled quality retry
  * @property {any} [_navInitTimer] - Timer handle for delayed post-navigation control injection
  * @property {number} [_lastNavTime] - Timestamp in ms of the most recent SPA navigation
@@ -124,6 +125,7 @@ const state = {
 
   // Quality & navigation timers
   qualityRetryCount: 0,
+  _qualityLockedForVideo: false,
   qualityRetryTimer: null,
   _navInitTimer: null,
   _lastNavTime: 0,
@@ -308,7 +310,9 @@ function getYtdPlayer() {
     _cachedYtdPlayer &&
     _cachedYtdPlayer.isConnected !== false &&
     _cachedYtdPlayer.parentElement &&
-    moviePlayer.closest("ytd-player") === _cachedYtdPlayer
+    (typeof _cachedYtdPlayer.contains === "function"
+      ? _cachedYtdPlayer.contains(moviePlayer)
+      : moviePlayer.closest("ytd-player") === _cachedYtdPlayer)
   ) {
     return _cachedYtdPlayer;
   }
@@ -530,6 +534,10 @@ async function applyQuality() {
         }
         const resolvedQuality = resolveBestAvailableQuality(availableLevels, targetQuality);
         if (resolvedQuality) {
+          if (typeof player.getPlaybackQuality === "function" && player.getPlaybackQuality() === resolvedQuality) {
+            state._qualityLockedForVideo = true;
+            return;
+          }
           if (typeof player.setPlaybackQuality === "function") {
             player.setPlaybackQuality(resolvedQuality);
           }
@@ -537,6 +545,7 @@ async function applyQuality() {
             player.setPlaybackQualityRange(resolvedQuality, resolvedQuality);
           }
           persistYouTubeQualityStorage(resolvedQuality);
+          state._qualityLockedForVideo = true;
           console.log(`[YT Adjust] Quality set to ${resolvedQuality} via player API`);
           return;
         }
@@ -550,6 +559,7 @@ async function applyQuality() {
   if (typeof player.getPlaybackQualityLabel === "function") {
     const currentLabel = player.getPlaybackQualityLabel();
     if (currentLabel && currentLabel.startsWith(targetLabel)) {
+      state._qualityLockedForVideo = true;
       console.log(`[YT Adjust] Quality already at ${currentLabel}`);
       return;
     }
@@ -559,6 +569,7 @@ async function applyQuality() {
   const video = getVideo();
   const expectedHeight = QUALITY_TO_HEIGHT[targetQuality];
   if (video && expectedHeight && video.videoHeight === expectedHeight) {
+    state._qualityLockedForVideo = true;
     console.log(`[YT Adjust] Quality already ${targetLabel} (${video.videoWidth}x${video.videoHeight})`);
     return;
   }
@@ -566,6 +577,7 @@ async function applyQuality() {
   // 4. Fallback: Automate settings menu if player API methods are unavailable
   try {
     await setQualityViaMenu(player, targetLabel);
+    state._qualityLockedForVideo = true;
   } catch (err) {
     const errorMsg = err instanceof Error ? err.message : String(err);
     console.log("[YT Adjust] Quality menu automation failed:", errorMsg);
@@ -1091,7 +1103,7 @@ function renderSeekbarOverlay() {
       willChange: "transform, opacity",
       pointerEvents: "none",
       borderRadius: "1px",
-      transition: "transform 0.15s ease, top 0.15s ease, height 0.15s ease, opacity 0.15s ease",
+      transition: "transform 0.15s ease, opacity 0.15s ease",
     });
 
     bar.dataset.category = segment.category;
@@ -2245,7 +2257,7 @@ let isRestoringSizeButton = false;
 function isTheaterModeActive() {
   const watchFlexy = document.querySelector("ytd-watch-flexy");
   if (watchFlexy && typeof watchFlexy.hasAttribute === "function") {
-    if (watchFlexy.hasAttribute("theater")) return true;
+    if (watchFlexy.hasAttribute("theater") || watchFlexy.hasAttribute("full-bleed-player")) return true;
   }
   const ytdPlayer = getYtdPlayer();
   if (!ytdPlayer) return false;
@@ -2865,7 +2877,6 @@ function setupMiniPlayer() {
   document.addEventListener("scroll", onMiniPlayerScroll, { passive: true });
   window.addEventListener("resize", onMiniPlayerWindowResize, { passive: true });
   document.addEventListener("fullscreenchange", onMiniPlayerFullscreenChange);
-  document.addEventListener("yt-set-theater-mode-enabled", onMiniPlayerTheaterToggle);
   document.addEventListener("click", onMiniPlayerTimestampClick, true);
   miniPlayerScrollBound = true;
 }
@@ -3480,7 +3491,6 @@ function teardownMiniPlayer() {
     document.removeEventListener("scroll", onMiniPlayerScroll);
     window.removeEventListener("resize", onMiniPlayerWindowResize);
     document.removeEventListener("fullscreenchange", onMiniPlayerFullscreenChange);
-    document.removeEventListener("yt-set-theater-mode-enabled", onMiniPlayerTheaterToggle);
     document.removeEventListener("click", onMiniPlayerTimestampClick, true);
     miniPlayerScrollBound = false;
   }
@@ -4524,6 +4534,7 @@ function handleSettingsUpdate(settings) {
   // Quality changed
   if (settings.quality !== prev.quality || settings.qualityEnabled !== prev.qualityEnabled) {
     state.qualityRetryCount = 0;
+    state._qualityLockedForVideo = false;
     if (state.settings.qualityEnabled) {
       applyQuality();
     }
@@ -4705,6 +4716,7 @@ function handleSegmentsUpdate(data) {
 function onYtPlayerUpdated() {
   if (location.pathname === "/watch" && state.settings.qualityEnabled && !isAdPlaying()) {
     state.qualityRetryCount = 0;
+    state._qualityLockedForVideo = false;
     applyQuality();
   }
 }
@@ -4721,6 +4733,7 @@ function onDocumentVideoLoadedData(e) {
   if (!target || target.tagName !== "VIDEO" || isInlinePreviewVideo(target)) return;
   if (location.pathname === "/watch" && state.settings.qualityEnabled && !isAdPlaying()) {
     state.qualityRetryCount = 0;
+    state._qualityLockedForVideo = false;
     applyQuality();
   }
 }
@@ -4738,7 +4751,13 @@ function bindPlayerQualityStateChange(player) {
   if (player.dataset) player.dataset.ytAdjustQualityStateBound = "true";
   player.addEventListener("onStateChange", (playerState) => {
     const code = typeof playerState === "number" ? playerState : Number(playerState);
-    if ((code === 1 || code === 3 || code === 5) && location.pathname === "/watch" && state.settings.qualityEnabled && !isAdPlaying()) {
+    if (
+      !state._qualityLockedForVideo &&
+      (code === 1 || code === 3 || code === 5) &&
+      location.pathname === "/watch" &&
+      state.settings.qualityEnabled &&
+      !isAdPlaying()
+    ) {
       applyQuality();
     }
   });
@@ -4829,6 +4848,7 @@ function onNavigate() {
 
   state._lastNavTime = Date.now();
   state.qualityRetryCount = 0;
+  state._qualityLockedForVideo = false;
   state.miniPlayerDismissed = false;
   state._hasAnnouncedCurrentPlayback = false;
   state._pendingPlayAnnouncement = false;

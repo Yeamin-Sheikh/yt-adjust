@@ -140,6 +140,8 @@ interface YouTubePlayerElement extends HTMLElement {
   pauseVideo?: () => void;
   setInternalSize?: () => void;
   setSize?: (width: number, height: number) => void;
+  setSizeStyle?: (showSizeButton: boolean, isTheater?: boolean) => void;
+  wakeUpControls?: () => void;
 }
 
 interface DocumentEventMap {
