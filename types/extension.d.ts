@@ -46,8 +46,55 @@ declare namespace chrome {
 
   namespace runtime {
     let lastError: { message?: string } | undefined;
-    const id: string;
+    const id: string | undefined;
     function getURL(path: string): string;
+    function getManifest(): { version?: string; [key: string]: any };
+    function sendMessage(
+      message: any,
+      responseCallback?: (response: any) => void
+    ): Promise<any>;
+
+    interface MessageSender {
+      tab?: any;
+      frameId?: number;
+      id?: string;
+      url?: string;
+      origin?: string;
+    }
+
+    interface ExtensionMessageEvent {
+      addListener(
+        callback: (
+          message: any,
+          sender: MessageSender,
+          sendResponse: (response?: any) => void
+        ) => boolean | void
+      ): void;
+      removeListener(callback: (...args: any[]) => void): void;
+      hasListener(callback: (...args: any[]) => void): boolean;
+    }
+
+    const onMessage: ExtensionMessageEvent;
+  }
+
+  namespace tabs {
+    interface Tab {
+      id?: number;
+      url?: string;
+      active?: boolean;
+      audible?: boolean;
+    }
+
+    function query(
+      queryInfo: { url?: string | string[]; active?: boolean; currentWindow?: boolean },
+      callback: (result: Tab[]) => void
+    ): void;
+
+    function sendMessage(
+      tabId: number,
+      message: any,
+      responseCallback?: (response: any) => void
+    ): void;
   }
 }
 
@@ -79,11 +126,15 @@ interface YouTubePlayerElement extends HTMLElement {
   unMute?: () => void;
   mute?: () => void;
   getPlaybackQuality?: () => string;
-  setPlaybackQualityRange?: (quality: string) => void;
+  setPlaybackQuality?: (quality: string) => void;
+  setPlaybackQualityRange?: (quality: string, maxQuality?: string) => void;
   getAvailableQualityLevels?: () => string[];
+  setPlaybackRate?: (suggestedRate: number) => void;
+  getPlaybackRate?: () => number;
   getVideoData?: () => { video_id?: string; title?: string; [key: string]: any };
   getCurrentTime?: () => number;
   getDuration?: () => number;
+  getPlayerState?: () => number;
   seekTo?: (seconds: number, allowSeekAhead?: boolean) => void;
   playVideo?: () => void;
   pauseVideo?: () => void;
@@ -109,9 +160,11 @@ interface ExtensionSettings {
   speedControlEnabled: boolean;
   speedStep: number;
   volumeBoostEnabled: boolean;
+  volumeBoostLevel: number;
   miniPlayerEnabled: boolean;
   pipEnabled: boolean;
   pipAutoOnTabSwitch: boolean;
+  pauseOtherTabsEnabled: boolean;
 }
 
 interface SponsorBlockSegment {
@@ -126,4 +179,12 @@ interface SponsorBlockApiResponseEntry {
   videoID: string;
   hash: string;
   segments: SponsorBlockSegment[];
+}
+
+interface SponsorBlockProxyResponse {
+  ok: boolean;
+  status: number;
+  data: any;
+  error?: string;
+  message?: string;
 }

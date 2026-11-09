@@ -3,9 +3,9 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/Yeamin-Sheikh/yt-adjust/releases/tag/v2.3.8"><img src="https://img.shields.io/badge/version-2.3.8-FF0000?style=for-the-badge&logo=youtube&logoColor=white" alt="Version 2.3.8"></a>
+  <a href="https://github.com/Yeamin-Sheikh/yt-adjust/releases/tag/v2.4.2"><img src="https://img.shields.io/badge/version-2.4.2-FF0000?style=for-the-badge&logo=youtube&logoColor=white" alt="Version 2.4.2"></a>
   <a href="https://developer.chrome.com/docs/extensions/mv3/intro/"><img src="https://img.shields.io/badge/Manifest-V3-10b981?style=for-the-badge&logo=googlechrome&logoColor=white" alt="Manifest V3"></a>
-  <img src="https://img.shields.io/badge/tests-66%20passing-38bdf8?style=for-the-badge&logo=checkmarx&logoColor=white" alt="66 Passing Tests">
+  <img src="https://img.shields.io/badge/tests-107%20passing-38bdf8?style=for-the-badge&logo=checkmarx&logoColor=white" alt="107 Passing Tests">
   <img src="https://img.shields.io/badge/Chromium-Supported-f59e0b?style=for-the-badge&logo=googlechrome&logoColor=white" alt="Chromium Supported">
   <img src="https://img.shields.io/badge/license-MIT-8b5cf6?style=for-the-badge" alt="MIT License">
 </p>
@@ -16,8 +16,8 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/Yeamin-Sheikh/yt-adjust/releases/download/v2.3.8/yt-adjust-v2.3.8.zip">
-    <img src="https://img.shields.io/badge/Download_Extension_ZIP-v2.3.8-d90429?style=for-the-badge&logo=zip&logoColor=white" alt="Download ZIP">
+  <a href="https://github.com/Yeamin-Sheikh/yt-adjust/releases/download/v2.4.2/yt-adjust-v2.4.2.zip">
+    <img src="https://img.shields.io/badge/Download_Extension_ZIP-v2.4.2-d90429?style=for-the-badge&logo=zip&logoColor=white" alt="Download ZIP">
   </a>
 </p>
 
@@ -35,13 +35,14 @@
 
 | Feature | Description | Interface details |
 |---|---|---|
-| **Auto quality** | Forces your preferred resolution (1080p, 1440p, 4K) on every video start. Falls back to the highest available quality if preferred is unavailable. | Settings menu automation |
-| **SponsorBlock** | Auto-skips sponsored segments, self-promotions, intros, and interaction reminders using the privacy-friendly hash-prefix [SponsorBlock API](https://sponsor.ajay.app/). | White seekbar segment markers with undo toast |
+| **Auto quality** | Forces your preferred resolution (1080p, 1440p, 4K) silently via YouTube's internal player API (`getAvailableQualityLevels` + `setPlaybackQualityRange`) without opening the settings menu. | Silent player API with menu fallback |
+| **SponsorBlock** | Auto-skips sponsored segments, self-promotions, intros, and interaction reminders using the privacy-friendly hash-prefix [SponsorBlock API](https://sponsor.ajay.app/). | Color-coded seekbar segment markers with undo toast |
 | **Volume gesture** | Hold right-click on the video player and scroll up or down to adjust volume. Right-clicking without scrolling opens the context menu normally. | Centered numeric volume HUD overlay |
 | **Speed control** | Hold <kbd>Shift</kbd> and scroll over the video, or hover over the speed button in the player controls and scroll to adjust rate (0.25x to 4x). | Injected 14px YouTube-styled dynamic pill |
-| **Volume boost** | 150% volume amplification powered by Web Audio API GainNode. Blends seamlessly into YouTube player bar next to the volume slider. | `((?))` pill button in player controls |
+| **Volume boost** | Configurable 150%, 200%, or 300% volume amplification powered by Web Audio API GainNode. Blends seamlessly into YouTube player bar next to the volume slider. | `((?))` pill button in player controls |
 | **Scroll mini-player** | When scrolling down to read comments, the video floats in a responsive 480x270 box in the top-right corner without layout shifts or black frames. | Dynamic corner mini-player |
 | **Picture-in-Picture** | Native HTML5 Picture-in-Picture toggle via shortcut, plus auto-PiP mode that activates when switching away from the playing video tab. | <kbd>Alt</kbd> + <kbd>P</kbd> or automatic tab switch |
+| **Pause other tabs** | Automatically pauses other playing YouTube tabs when a video starts playing in a new or different tab so multiple videos never play audio simultaneously. | Popup toggle (off by default) |
 
 ---
 
@@ -63,7 +64,7 @@
 
 ### Option 1: Load pre-built release ZIP (recommended)
 
-1. Download **[yt-adjust-v2.3.5.zip](https://github.com/Yeamin-Sheikh/yt-adjust/releases/download/v2.3.5/yt-adjust-v2.3.5.zip)** from the releases page.
+1. Download **[yt-adjust-v2.4.0.zip](https://github.com/Yeamin-Sheikh/yt-adjust/releases/download/v2.4.0/yt-adjust-v2.4.0.zip)** from the releases page.
 2. Extract the archive into a folder on your computer.
 3. Open your Chromium browser (Chrome, Helium, Brave, Edge, Opera) and navigate to `chrome://extensions` (or `helium://extensions`).
 4. Toggle **Developer mode** in the top-right corner.
@@ -96,10 +97,12 @@ Click the extension icon in your browser toolbar to open the settings popup. All
 | Volume step | 5% | Volume change step percentage per scroll tick (1% to 10%) |
 | Speed control | Enabled | Shift + scroll and player button hover-scroll speed adjustment |
 | Speed step | 0.25x | Playback rate delta per scroll tick (0.1x, 0.25x, 0.5x) |
-| Volume boost | Enabled | Show `((?))` button in player bar for 150% audio amplification |
+| Volume boost | Enabled | Show `((?))` button in player bar for Web Audio amplification |
+| Boost level | 150% | Configurable audio boost multiplier (150%, 200%, 300%) |
 | Mini player | Enabled | Float video in top-right corner when scrolling down to comments |
 | Picture-in-Picture | Enabled | Enable native HTML5 Picture-in-Picture toggle (<kbd>Alt</kbd> + <kbd>P</kbd>) |
-| Auto-PiP on tab switch | Disabled | Automatically enter PiP when switching away from playing video tab |
+| Auto-PiP on tab switch | Enabled | Automatically enter PiP when switching away from playing video tab |
+| Pause other tabs | Disabled | Pause other YouTube tabs automatically when a video starts playing |
 
 ---
 
@@ -145,7 +148,7 @@ npm run typecheck
 # Syntax validation across all scripts
 npm run lint:syntax
 
-# Run full empirical and adversarial test suite (61 tests)
+# Run full empirical and adversarial test suite (99 tests)
 npm test
 ```
 
@@ -158,7 +161,7 @@ yt-adjust/
 +-- assets/
 ¦   +-- banner.svg                 # Vector hero banner for repository
 +-- content/
-¦   +-- isolated.js                # Isolated world: Chrome storage, SponsorBlock API
+¦   +-- isolated.js                # Isolated world: Chrome storage, SponsorBlock messaging
 ¦   +-- main.js                    # Main world: HTML5 video player integration (7 modules)
 +-- icons/
 ¦   +-- icon16.png
@@ -173,7 +176,8 @@ yt-adjust/
 ¦   +-- empirical-challenger.js      # Player lifecycle, audio, CSP, and PiP tests
 +-- types/
 ¦   +-- extension.d.ts             # TypeScript declarations for Chrome & YouTube APIs
-+-- manifest.json                  # Manifest V3 configuration (v2.3.8)
++-- background.js                  # MV3 Service Worker: cross-origin SponsorBlock API proxy
++-- manifest.json                  # Manifest V3 configuration (v2.4.0)
 +-- package.json
 +-- tsconfig.json
 +-- .gitignore

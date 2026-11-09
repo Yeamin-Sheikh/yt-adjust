@@ -28,19 +28,22 @@
 <body>
     <header class="header">
         <div class="logo-group">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" class="logo-icon"><path d="M4.93 19.07A10 10 0 1 1 19.07 19.07"/><path d="M12 12l4.5-4.5"/><circle cx="12" cy="12" r="2" fill="currentColor"/></svg>
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" class="logo-icon" aria-hidden="true"><path d="M4.93 19.07A10 10 0 1 1 19.07 19.07"/><path d="M12 12l4.5-4.5"/><circle cx="12" cy="12" r="2" fill="currentColor"/></svg>
             <h1>YT Adjust</h1>
         </div>
-        <span class="version">v2.3.8</span>
+        <div class="header-actions">
+            <button type="button" id="resetDefaultsBtn" class="reset-btn" title="Reset all settings to defaults" aria-label="Reset all settings to defaults">Reset</button>
+            <span class="version">v2.4.2</span>
+        </div>
     </header>
 
     <main class="content">
         <!-- 1. Quality -->
         <section class="group">
             <div class="setting-row">
-                <span class="setting-label">Quality</span>
+                <label class="setting-label" for="qualitySelect">Quality</label>
                 <div class="inline-controls" id="qualitySelectorRow">
-                    <select id="qualitySelect" class="custom-select">
+                    <select id="qualitySelect" class="custom-select" aria-label="Preferred video quality">
                         <option value="highres">4K</option>
                         <option value="hd1440">1440p</option>
                         <option value="hd1080" selected>1080p</option>
@@ -49,7 +52,7 @@
                         <option value="auto">Auto</option>
                     </select>
                     <label class="toggle-switch">
-                        <input type="checkbox" id="qualityEnabled" checked>
+                        <input type="checkbox" id="qualityEnabled" aria-label="Enable auto quality" checked>
                         <span class="slider"></span>
                     </label>
                 </div>
@@ -59,7 +62,7 @@
         <!-- 2. SponsorBlock -->
         <section class="group">
             <div class="setting-row">
-                <span class="setting-label">SponsorBlock</span>
+                <label class="setting-label" for="sponsorblockEnabled">SponsorBlock</label>
                 <label class="toggle-switch">
                     <input type="checkbox" id="sponsorblockEnabled" checked>
                     <span class="slider"></span>
@@ -68,20 +71,21 @@
             
             <div class="sub-settings" id="sponsorblockSettings">
                 <div class="setting-subrow">
-                    <span class="sub-label">Show skip toast</span>
+                    <label class="sub-label" for="sponsorblockNotify">Show skip toast</label>
                     <label class="toggle-switch mini">
                         <input type="checkbox" id="sponsorblockNotify" checked>
                         <span class="slider"></span>
                     </label>
                 </div>
                 <div class="chips-grid">
-                    <label class="chip"><input type="checkbox" value="sponsor" class="category-cb" checked><span>Sponsor</span></label>
-                    <label class="chip"><input type="checkbox" value="selfpromo" class="category-cb" checked><span>Promo</span></label>
-                    <label class="chip"><input type="checkbox" value="interaction" class="category-cb" checked><span>Interaction</span></label>
-                    <label class="chip"><input type="checkbox" value="intro" class="category-cb"><span>Intro</span></label>
-                    <label class="chip"><input type="checkbox" value="outro" class="category-cb"><span>Outro</span></label>
-                    <label class="chip"><input type="checkbox" value="preview" class="category-cb"><span>Preview</span></label>
-                    <label class="chip"><input type="checkbox" value="filler" class="category-cb"><span>Filler</span></label>
+                    <label class="chip" data-cat="sponsor"><input type="checkbox" value="sponsor" class="category-cb" checked><span>Sponsor</span></label>
+                    <label class="chip" data-cat="selfpromo"><input type="checkbox" value="selfpromo" class="category-cb" checked><span>Promo</span></label>
+                    <label class="chip" data-cat="interaction"><input type="checkbox" value="interaction" class="category-cb" checked><span>Interaction</span></label>
+                    <label class="chip" data-cat="intro"><input type="checkbox" value="intro" class="category-cb"><span>Intro</span></label>
+                    <label class="chip" data-cat="outro"><input type="checkbox" value="outro" class="category-cb"><span>Outro</span></label>
+                    <label class="chip" data-cat="preview"><input type="checkbox" value="preview" class="category-cb"><span>Preview</span></label>
+                    <label class="chip" data-cat="filler"><input type="checkbox" value="filler" class="category-cb"><span>Filler</span></label>
+                    <label class="chip" data-cat="music_offtopic"><input type="checkbox" value="music_offtopic" class="category-cb"><span>Music</span></label>
                 </div>
             </div>
         </section>
@@ -89,7 +93,7 @@
         <!-- 3. Volume Gestures -->
         <section class="group">
             <div class="setting-row">
-                <span class="setting-label">Volume Gesture</span>
+                <label class="setting-label" for="volumeGestureEnabled">Volume Gesture <small>(Right-click + Scroll)</small></label>
                 <label class="toggle-switch">
                     <input type="checkbox" id="volumeGestureEnabled" checked>
                     <span class="slider"></span>
@@ -97,7 +101,7 @@
             </div>
             <div class="sub-settings" id="volumeSettings">
                 <div class="slider-row">
-                    <span class="sub-label">Step</span>
+                    <label class="sub-label" for="volumeStep">Step</label>
                     <input type="range" id="volumeStep" min="1" max="10" step="1" value="5" class="custom-slider">
                     <span id="volumeStepValue" class="value-display">5%</span>
                 </div>
@@ -107,15 +111,15 @@
         <!-- 4. Speed Control -->
         <section class="group">
             <div class="setting-row">
-                <span class="setting-label">Speed Control</span>
+                <label class="setting-label" for="speedStep">Speed Control <small>(Shift + Scroll)</small></label>
                 <div class="inline-controls" id="speedSelectorRow">
-                    <select id="speedStep" class="custom-select">
+                    <select id="speedStep" class="custom-select" aria-label="Playback speed step">
                         <option value="0.1">0.1x</option>
                         <option value="0.25" selected>0.25x</option>
                         <option value="0.5">0.5x</option>
                     </select>
                     <label class="toggle-switch">
-                        <input type="checkbox" id="speedControlEnabled" checked>
+                        <input type="checkbox" id="speedControlEnabled" aria-label="Enable speed control" checked>
                         <span class="slider"></span>
                     </label>
                 </div>
@@ -125,17 +129,24 @@
         <!-- 5. Boost & Mini Player -->
         <section class="group">
             <div class="setting-row">
-                <span class="setting-label">Volume Boost <small>(150%)</small></span>
-                <label class="toggle-switch">
-                    <input type="checkbox" id="volumeBoostEnabled" checked>
-                    <span class="slider"></span>
-                </label>
+                <label class="setting-label" for="volumeBoostLevel">Volume Boost</label>
+                <div class="inline-controls" id="boostSelectorRow">
+                    <select id="volumeBoostLevel" class="custom-select" aria-label="Volume boost level">
+                        <option value="1.5" selected>150%</option>
+                        <option value="2">200%</option>
+                        <option value="3">300%</option>
+                    </select>
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="volumeBoostEnabled" aria-label="Enable volume boost" checked>
+                        <span class="slider"></span>
+                    </label>
+                </div>
             </div>
         </section>
 
         <section class="group">
             <div class="setting-row">
-                <span class="setting-label">Scroll Mini-Player</span>
+                <label class="setting-label" for="miniPlayerEnabled">Scroll Mini-Player</label>
                 <label class="toggle-switch">
                     <input type="checkbox" id="miniPlayerEnabled" checked>
                     <span class="slider"></span>
@@ -146,7 +157,7 @@
         <!-- 7. Picture-in-Picture -->
         <section class="group">
             <div class="setting-row">
-                <span class="setting-label">Picture-in-Picture <small>(Alt+P)</small></span>
+                <label class="setting-label" for="pipEnabled">Picture-in-Picture <small>(Alt+P)</small></label>
                 <label class="toggle-switch">
                     <input type="checkbox" id="pipEnabled" checked>
                     <span class="slider"></span>
@@ -154,12 +165,23 @@
             </div>
             <div class="sub-settings" id="pipSettings">
                 <div class="setting-subrow">
-                    <span class="sub-label">Auto-PiP on tab switch</span>
+                    <label class="sub-label" for="pipAutoOnTabSwitch">Auto-PiP on tab switch</label>
                     <label class="toggle-switch mini">
                         <input type="checkbox" id="pipAutoOnTabSwitch" checked>
                         <span class="slider"></span>
                     </label>
                 </div>
+            </div>
+        </section>
+
+        <!-- 8. Pause Other Tabs -->
+        <section class="group">
+            <div class="setting-row">
+                <label class="setting-label" for="pauseOtherTabsEnabled">Pause Other Tabs <small>(Single Audio)</small></label>
+                <label class="toggle-switch">
+                    <input type="checkbox" id="pauseOtherTabsEnabled">
+                    <span class="slider"></span>
+                </label>
             </div>
         </section>
     </main>

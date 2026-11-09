@@ -15,6 +15,7 @@ const rootDir = path.resolve(".");
 const isolatedCode = fs.readFileSync(path.join(rootDir, "content/isolated.js"), "utf8");
 const popupCode = fs.readFileSync(path.join(rootDir, "popup/popup.js"), "utf8");
 const mainCode = fs.readFileSync(path.join(rootDir, "content/main.js"), "utf8");
+const backgroundCode = fs.readFileSync(path.join(rootDir, "background.js"), "utf8");
 
 let totalTests = 0;
 let passedTests = 0;
@@ -382,6 +383,50 @@ await testAsync("fetchSegments: cache key normalizes category order", async () =
   const res2 = await sandbox.fetchSegments("normVid", ["interaction", "sponsor", "selfpromo"]);
   assert.equal(fetchCount, 1, "different category order should match sorted cacheKey");
   assert.equal(res2.length, 1);
+});
+
+await testAsync("fetchSegments: deduplicates concurrent in-flight requests for the same cacheKey", async () => {
+  let fetchCount = 0;
+  const sandbox = createIsolatedSandbox({
+    fetch: async () => {
+      fetchCount++;
+      await new Promise((r) => setTimeout(r, 10));
+      return {
+        status: 200,
+        ok: true,
+        json: async () => [{ videoID: "dedupVid", segments: [{ UUID: "u1", segment: [1, 10], category: "sponsor" }] }]
+      };
+    }
+  });
+  vm.createContext(sandbox);
+  const code = isolatedCode + "\n; globalThis.fetchSegments = fetchSegments;";
+  vm.runInContext(code, sandbox);
+
+  const [r1, r2] = await Promise.all([
+    sandbox.fetchSegments("dedupVid", ["sponsor"]),
+    sandbox.fetchSegments("dedupVid", ["sponsor"])
+  ]);
+  assert.equal(fetchCount, 1, "concurrent calls must share a single network fetch");
+  assert.equal(r1.length, 1);
+  assert.equal(r2.length, 1);
+  assert.equal(r1[0].UUID, "u1");
+});
+
+test("setInSegmentCache: updating an existing key at capacity refreshes order without evicting another entry", () => {
+  const sandbox = createIsolatedSandbox();
+  vm.createContext(sandbox);
+  const code = isolatedCode + "\n; globalThis.setInSegmentCache = setInSegmentCache; globalThis.segmentCache = segmentCache;";
+  vm.runInContext(code, sandbox);
+
+  for (let i = 0; i < 50; i++) {
+    sandbox.setInSegmentCache(`key-${i}`, []);
+  }
+  assert.equal(sandbox.segmentCache.size, 50);
+
+  // Updating an existing key (key-25) when size === 50 must NOT evict key-0
+  sandbox.setInSegmentCache("key-25", [{ segment: [1, 2], UUID: "u", category: "sponsor" }]);
+  assert.equal(sandbox.segmentCache.size, 50);
+  assert.equal(sandbox.segmentCache.has("key-0"), true, "oldest key must not be evicted when updating an existing key");
 });
 
 console.log("\n=======================================================");
@@ -902,6 +947,327 @@ test("content/main.js: message listener validates origin, source, and payload", 
       }
     });
   });
+});
+
+test("popup.js: applySettings clamps out-of-range values and toggleVisibility sets inert", () => {
+  const elementsMap = {};
+  const mockDoc = {
+    getElementById: (id) => {
+      if (!elementsMap[id]) {
+        elementsMap[id] = {
+          id,
+          value: "",
+          checked: false,
+          textContent: "",
+          inert: false,
+          attrs: {},
+          style: {},
+          setAttribute(k, v) { this.attrs[k] = v; },
+          addEventListener: () => {}
+        };
+      }
+      return elementsMap[id];
+    },
+    querySelectorAll: () => [],
+    addEventListener: () => {},
+    readyState: "loading"
+  };
+
+  const mockChrome = {
+    storage: {
+      sync: {
+        get: (defaults, cb) => cb({
+          quality: "9999p_invalid",
+          volumeStep: 99,
+          speedStep: 7.77,
+          qualityEnabled: false
+        })
+      }
+    },
+    runtime: { lastError: undefined }
+  };
+
+  const sandbox = {
+    document: mockDoc,
+    chrome: mockChrome,
+    console: { warn: () => {}, error: () => {}, log: () => {} },
+    Number: Number,
+    Boolean: Boolean,
+    String: String,
+    Array: Array
+  };
+  vm.createContext(sandbox);
+  const code = popupCode + "\n; cacheElements(); loadSettings();";
+  vm.runInContext(code, sandbox);
+
+  assert.equal(elementsMap["qualitySelect"].value, "hd1080", "invalid quality falls back to DEFAULT_SETTINGS.quality");
+  assert.equal(elementsMap["volumeStep"].value, "5", "out-of-range volumeStep 99 falls back to 5");
+  assert.equal(elementsMap["speedStep"].value, "0.25", "unrecognized speedStep 7.77 falls back to 0.25");
+  assert.equal(elementsMap["qualitySelect"].inert, true, "disabled control sets inert = true");
+  assert.equal(elementsMap["qualitySelect"].attrs["aria-disabled"], "true", "disabled control sets aria-disabled = true");
+});
+
+test("popup.js: saveSetting mirrors writes to both chrome.storage.sync and chrome.storage.local for Chrome/Helium parity", () => {
+  const syncSaved = {};
+  const localSaved = {};
+  const mockChrome = {
+    storage: {
+      sync: {
+        set: (items, cb) => {
+          Object.assign(syncSaved, items);
+          cb?.();
+        }
+      },
+      local: {
+        set: (items, cb) => {
+          Object.assign(localSaved, items);
+          cb?.();
+        }
+      }
+    },
+    runtime: { lastError: undefined }
+  };
+
+  const mockDoc = {
+    getElementById: () => null,
+    querySelectorAll: () => [],
+    addEventListener: () => {},
+    readyState: "loading"
+  };
+
+  const sandbox = {
+    document: mockDoc,
+    chrome: mockChrome,
+    console: { warn: () => {}, error: () => {}, log: () => {} },
+    Number: Number,
+    Boolean: Boolean,
+    String: String,
+    Array: Array
+  };
+  vm.createContext(sandbox);
+  const code = popupCode + "\n; globalThis.saveSetting = saveSetting;";
+  vm.runInContext(code, sandbox);
+
+  sandbox.saveSetting("quality", "highres");
+  assert.equal(syncSaved.quality, "highres", "saved to chrome.storage.sync");
+  assert.equal(localSaved.quality, "highres", "mirrored to chrome.storage.local for Helium parity");
+});
+
+test("Cross-file parity: version string (2.4.2) and default settings match across all files with zero discrepancy", () => {
+  const manifest = JSON.parse(fs.readFileSync(path.join(rootDir, "manifest.json"), "utf8"));
+  const pkg = JSON.parse(fs.readFileSync(path.join(rootDir, "package.json"), "utf8"));
+  const pkgLock = JSON.parse(fs.readFileSync(path.join(rootDir, "package-lock.json"), "utf8"));
+  const popupHtml = fs.readFileSync(path.join(rootDir, "popup/popup.html"), "utf8");
+
+  assert.equal(manifest.version, "2.4.2");
+  assert.equal(pkg.version, "2.4.2");
+  assert.equal(pkgLock.version, "2.4.2");
+  assert.ok(popupHtml.includes(`>v${manifest.version}<`), "popup.html version badge matches manifest.version");
+  assert.ok(popupCode.includes(`(v${manifest.version})`), "popup.js header matches manifest.version");
+  assert.ok(isolatedCode.includes(`(v${manifest.version})`), "isolated.js version matches manifest.version");
+  assert.ok(mainCode.includes(`(v${manifest.version})`), "main.js version matches manifest.version");
+  assert.ok(backgroundCode.includes(`(v${manifest.version})`), "background.js version matches manifest.version");
+
+  // Extract DEFAULTS from isolated.js, DEFAULT_SETTINGS from popup.js, and state.settings from main.js
+  const isoBox = createIsolatedSandbox();
+  vm.createContext(isoBox);
+  vm.runInContext(isolatedCode + "\n; globalThis.DEFAULTS = DEFAULTS;", isoBox);
+
+  const popBox = {
+    document: { getElementById: () => null, querySelectorAll: () => [], addEventListener: () => {}, readyState: "loading" },
+    console: { warn: () => {}, error: () => {}, log: () => {} },
+    Number, Boolean, String, Array
+  };
+  vm.createContext(popBox);
+  vm.runInContext(popupCode + "\n; globalThis.DEFAULT_SETTINGS = DEFAULT_SETTINGS;", popBox);
+
+  const mainBox = {
+    window: { location: { origin: "https://www.youtube.com", pathname: "/watch", search: "?v=test" }, addEventListener: () => {}, postMessage: () => {} },
+    location: { origin: "https://www.youtube.com", pathname: "/watch", search: "?v=test" },
+    document: { addEventListener: () => {}, getElementById: () => null, querySelector: () => null, querySelectorAll: () => [], createElement: () => ({ style: {}, appendChild: () => {}, setAttribute: () => {} }), body: { appendChild: () => {} } },
+    console: { warn: () => {}, error: () => {}, log: () => {} },
+    setTimeout: () => 0, clearTimeout: () => {}, setInterval: () => 0, clearInterval: () => {},
+    URLSearchParams, Set, Math
+  };
+  mainBox.window.window = mainBox.window;
+  vm.createContext(mainBox);
+  vm.runInContext(mainCode + "\n; globalThis.mainSettings = state.settings;", mainBox);
+
+  assert.deepEqual(isoBox.DEFAULTS, popBox.DEFAULT_SETTINGS, "isolated.js DEFAULTS and popup.js DEFAULT_SETTINGS are identical");
+  assert.deepEqual(isoBox.DEFAULTS, mainBox.mainSettings, "isolated.js DEFAULTS and main.js state.settings are identical");
+  assert.equal(manifest.background?.service_worker, "background.js", "manifest.json declares background.js service worker");
+});
+
+await testAsync("MV3 Cross-Origin Isolation: fetchSegments routes via chrome.runtime.sendMessage and never calls frame fetch()", async () => {
+  let frameFetchCalled = false;
+  let sentMessages = [];
+
+  // Set up background.js in its own VM context
+  let bgMessageListener = null;
+  const bgSandbox = {
+    chrome: {
+      runtime: {
+        onMessage: {
+          addListener: (fn) => {
+            bgMessageListener = fn;
+          }
+        }
+      }
+    },
+    fetch: async (url, opts) => {
+      assert.ok(url.startsWith("https://sponsor.ajay.app/api/skipSegments/"), "background fetches SponsorBlock endpoint");
+      assert.equal(opts.credentials, "omit", "background omits credentials");
+      return {
+        ok: true,
+        status: 200,
+        json: async () => [
+          {
+            videoID: "6C1l1M5Q49w",
+            segments: [
+              { segment: [12.5, 42.0], category: "sponsor", UUID: "sb-uuid-1" }
+            ]
+          }
+        ]
+      };
+    },
+    AbortController: globalThis.AbortController,
+    setTimeout: globalThis.setTimeout,
+    clearTimeout: globalThis.clearTimeout,
+    Boolean,
+    String
+  };
+  vm.createContext(bgSandbox);
+  vm.runInContext(backgroundCode + "\n; globalThis.handleSponsorBlockFetch = handleSponsorBlockFetch;", bgSandbox);
+  assert.equal(typeof bgMessageListener, "function", "background.js registers chrome.runtime.onMessage listener");
+
+  // Set up isolated.js with chrome.runtime.sendMessage wired to background.js listener
+  const isoSandbox = createIsolatedSandbox({
+    fetch: async () => {
+      frameFetchCalled = true;
+      throw new Error("Unsafe attempt to load URL from frame with URL https://www.youtube.com");
+    },
+    chrome: {
+      runtime: {
+        sendMessage: (msg) =>
+          new Promise((resolve) => {
+            sentMessages.push(msg);
+            const asyncKeepOpen = bgMessageListener(msg, {}, resolve);
+            assert.equal(asyncKeepOpen, true, "listener returns true to keep channel open");
+          })
+      }
+    }
+  });
+  vm.createContext(isoSandbox);
+  vm.runInContext(isolatedCode + "\n; globalThis.fetchSegments = fetchSegments;", isoSandbox);
+
+  const segments = await isoSandbox.fetchSegments("6C1l1M5Q49w", ["sponsor", "selfpromo"]);
+  assert.equal(frameFetchCalled, false, "frame-level fetch() must NEVER be called when chrome.runtime.sendMessage is available");
+  assert.equal(sentMessages.length, 1, "sent 1 message to background service worker");
+  assert.equal(sentMessages[0].type, "FETCH_SPONSORBLOCK");
+  assert.equal(segments.length, 1, "received 1 validated segment via background service worker");
+  assert.deepEqual(Array.from(segments[0].segment), [12.5, 42.0]);
+
+  // Verify background.js rejects arbitrary non-SponsorBlock URLs
+  const blockedRes = await bgSandbox.handleSponsorBlockFetch("https://evil.example.com/api");
+  assert.equal(blockedRes.ok, false);
+  assert.equal(blockedRes.error, "InvalidUrlError");
+});
+
+await testAsync("isolated.js getSettings: caches settings in memory across repeated calls and refreshes when forceRefresh=true", async () => {
+  let syncReadCount = 0;
+  let storedQuality = "hd1080";
+  const sandbox = createIsolatedSandbox({
+    chrome: {
+      storage: {
+        sync: {
+          get: async () => {
+            syncReadCount++;
+            return { quality: storedQuality, volumeBoostLevel: 2 };
+          }
+        }
+      }
+    }
+  });
+  vm.createContext(sandbox);
+  vm.runInContext(isolatedCode + "\n; globalThis.getSettings = getSettings;", sandbox);
+
+  const first = await sandbox.getSettings();
+  assert.equal(first.quality, "hd1080");
+  assert.equal(first.volumeBoostLevel, 2);
+  assert.equal(syncReadCount, 1, "first call reads from chrome.storage.sync");
+
+  storedQuality = "highres";
+  const second = await sandbox.getSettings();
+  assert.equal(second.quality, "hd1080", "second call returns cached settings without hitting storage");
+  assert.equal(syncReadCount, 1, "storage read count remains 1");
+
+  const refreshed = await sandbox.getSettings(true);
+  assert.equal(refreshed.quality, "highres", "forceRefresh=true reloads updated storage value");
+  assert.equal(syncReadCount, 2, "storage read count increments on forceRefresh");
+});
+
+test("popup.js: volumeBoostLevel validation and resetDefaults restores DEFAULT_SETTINGS across sync, local, and localStorage", () => {
+  let syncSaved = {};
+  let localSaved = {};
+  let localStore = {};
+
+  const elementsMap = {
+    qualityEnabled: { checked: false, style: {}, addEventListener: () => {} },
+    qualitySelect: { value: "large", style: {}, addEventListener: () => {} },
+    volumeBoostEnabled: { checked: false, style: {}, addEventListener: () => {} },
+    volumeBoostLevel: { value: "3", style: {}, addEventListener: () => {} },
+    resetDefaultsBtn: { addEventListener: () => {} }
+  };
+
+  const sandbox = {
+    document: {
+      getElementById: (id) => elementsMap[id] || null,
+      querySelectorAll: () => [],
+      querySelector: () => null,
+      addEventListener: () => {},
+      readyState: "loading"
+    },
+    localStorage: {
+      getItem: (k) => localStore[k] || null,
+      setItem: (k, v) => { localStore[k] = v; }
+    },
+    chrome: {
+      storage: {
+        sync: {
+          set: (items, cb) => { Object.assign(syncSaved, items); cb?.(); }
+        },
+        local: {
+          set: (items, cb) => { Object.assign(localSaved, items); cb?.(); }
+        }
+      },
+      runtime: { lastError: undefined }
+    },
+    console: { warn: () => {}, error: () => {}, log: () => {} },
+    Number, Boolean, String, Array
+  };
+  vm.createContext(sandbox);
+  vm.runInContext(
+    popupCode + "\n; globalThis.cacheElements = cacheElements; globalThis.applySettings = applySettings; globalThis.resetDefaults = resetDefaults; globalThis.DEFAULT_SETTINGS = DEFAULT_SETTINGS;",
+    sandbox
+  );
+
+  sandbox.cacheElements();
+  // Apply invalid volumeBoostLevel (99) -> falls back to 1.5
+  sandbox.applySettings({ ...sandbox.DEFAULT_SETTINGS, volumeBoostLevel: 99, quality: "large" });
+  assert.equal(elementsMap.volumeBoostLevel.value, "1.5", "invalid volumeBoostLevel falls back to 1.5");
+
+  // Apply valid volumeBoostLevel (3) -> sets "3"
+  sandbox.applySettings({ ...sandbox.DEFAULT_SETTINGS, volumeBoostLevel: 3, quality: "large", qualityEnabled: false });
+  assert.equal(elementsMap.volumeBoostLevel.value, "3", "valid volumeBoostLevel (300%) applied");
+  assert.equal(elementsMap.qualitySelect.value, "large");
+
+  // Trigger resetDefaults()
+  sandbox.resetDefaults();
+  assert.equal(elementsMap.qualitySelect.value, "hd1080", "resetDefaults restores qualitySelect to hd1080");
+  assert.equal(elementsMap.qualityEnabled.checked, true, "resetDefaults restores qualityEnabled to true");
+  assert.equal(elementsMap.volumeBoostLevel.value, "1.5", "resetDefaults restores volumeBoostLevel to 1.5");
+  assert.equal(syncSaved.quality, "hd1080", "resetDefaults persists defaults to chrome.storage.sync");
+  assert.equal(localSaved.volumeBoostLevel, 1.5, "resetDefaults persists defaults to chrome.storage.local");
 });
 
 console.log("\n=======================================================");

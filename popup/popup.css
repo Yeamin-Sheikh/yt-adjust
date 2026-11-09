@@ -75,6 +75,35 @@ body::-webkit-scrollbar-thumb {
     color: var(--text-primary);
 }
 
+.header-actions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.reset-btn {
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--text-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    padding: 1px 6px;
+    font-size: 10px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.12s ease, color 0.12s ease, border-color 0.12s ease;
+}
+
+.reset-btn:hover {
+    background: rgba(255, 59, 48, 0.15);
+    color: var(--chip-active-text);
+    border-color: var(--chip-active-border);
+}
+
+.reset-btn:focus-visible {
+    outline: 2px solid var(--accent-blue);
+    outline-offset: 2px;
+}
+
 .version {
     font-size: 10px;
     font-weight: 500;
@@ -112,6 +141,7 @@ body::-webkit-scrollbar-thumb {
     display: flex;
     align-items: center;
     gap: 4px;
+    cursor: pointer;
 }
 
 .setting-label small {
@@ -137,10 +167,15 @@ body::-webkit-scrollbar-thumb {
 }
 
 .toggle-switch input {
-    opacity: 0;
-    width: 0;
-    height: 0;
     position: absolute;
+    clip-path: inset(50%);
+    overflow: hidden;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    border: 0;
+    white-space: nowrap;
 }
 
 .slider {
@@ -183,8 +218,14 @@ input:checked + .slider:before {
     width: 10px;
 }
 
-input:checked + .toggle-switch.mini .slider:before {
+.toggle-switch.mini input:checked + .slider:before {
     transform: translateX(10px);
+}
+
+.toggle-switch input:focus-visible + .slider,
+.chip input:focus-visible + span {
+    outline: 2px solid var(--accent-blue);
+    outline-offset: 2px;
 }
 
 /* Custom Select Dropdowns */
@@ -232,6 +273,7 @@ input:checked + .toggle-switch.mini .slider:before {
 .sub-label {
     font-size: 11px;
     color: var(--text-secondary);
+    cursor: pointer;
 }
 
 /* SponsorBlock Category Chips */
@@ -244,14 +286,25 @@ input:checked + .toggle-switch.mini .slider:before {
 
 .chip {
     cursor: pointer;
+    position: relative;
 }
 
 .chip input {
-    display: none;
+    position: absolute;
+    clip-path: inset(50%);
+    overflow: hidden;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    border: 0;
+    white-space: nowrap;
 }
 
 .chip span {
-    display: inline-block;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
     padding: 2px 6px;
     font-size: 10.5px;
     font-weight: 500;
@@ -261,6 +314,25 @@ input:checked + .toggle-switch.mini .slider:before {
     border: 1px solid var(--border-subtle);
     transition: background 0.12s ease, color 0.12s ease, border-color 0.12s ease;
 }
+
+.chip[data-cat] span::before {
+    content: "";
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background-color: var(--cat-color, #fff);
+    opacity: 0.85;
+    flex-shrink: 0;
+}
+
+.chip[data-cat="sponsor"] { --cat-color: #00d400; }
+.chip[data-cat="selfpromo"] { --cat-color: #ffff00; }
+.chip[data-cat="interaction"] { --cat-color: #cc00ff; }
+.chip[data-cat="intro"] { --cat-color: #00ffff; }
+.chip[data-cat="outro"] { --cat-color: #3ea6ff; }
+.chip[data-cat="preview"] { --cat-color: #008fd6; }
+.chip[data-cat="filler"] { --cat-color: #7300ff; }
+.chip[data-cat="music_offtopic"] { --cat-color: #ff9900; }
 
 .chip input:checked + span {
     background: var(--chip-active-bg);

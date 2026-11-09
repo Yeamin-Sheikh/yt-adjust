@@ -1,12 +1,12 @@
 {
   "name": "yt-adjust",
-  "version": "2.3.8",
+  "version": "2.4.2",
   "description": "Lightweight YouTube enhancer",
   "author": "Sheikh Technology LLC",
   "private": true,
   "scripts": {
     "typecheck": "tsc --noEmit --allowJs --checkJs",
-    "lint:syntax": "node -c content/main.js content/isolated.js popup/popup.js",
+    "lint:syntax": "node -c background.js && node -c content/main.js && node -c content/isolated.js && node -c popup/popup.js",
     "test": "node tests/adversarial-stress-suite.mjs && node tests/empirical-challenger.js"
   },
   "devDependencies": {

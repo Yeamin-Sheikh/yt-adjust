@@ -9,11 +9,12 @@
     "noEmit": true,
     "strict": true,
     "noImplicitAny": true,
-    "strictNullChecks": false,
+    "strictNullChecks": true,
     "skipLibCheck": true
   },
   "include": [
     "types/**/*.d.ts",
+    "background.js",
     "content/**/*.js",
     "popup/**/*.js"
   ],

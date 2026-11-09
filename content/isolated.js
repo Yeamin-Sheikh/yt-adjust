@@ -1,5 +1,5 @@
 // =============================================================================
-// YT Adjust — Isolated World Content Script
+// YT Adjust — Isolated World Content Script (v2.4.2)
 // =============================================================================
 // This script runs in Chrome's ISOLATED execution world.
 // In Manifest V3, an isolated world content script shares the DOM with the web
@@ -42,16 +42,83 @@ const DEFAULTS = {
   speedControlEnabled: true,
   speedStep: 0.25,
   volumeBoostEnabled: true,
+  volumeBoostLevel: 1.5,
   miniPlayerEnabled: true,
   pipEnabled: true,
   pipAutoOnTabSwitch: true,
+  pauseOtherTabsEnabled: false,
 };
+
+const ISO_VALID_QUALITIES = ["highres", "hd2160", "hd1440", "hd1080", "hd720", "large", "medium", "small", "tiny", "auto"];
+const ISO_VALID_SPEED_STEPS = [0.1, 0.25, 0.5];
+const ISO_VALID_BOOST_LEVELS = [1.5, 2, 3];
+
+/**
+ * Normalizes and validates raw storage values against DEFAULTS so both Chrome
+ * and Helium receive strictly typed settings with zero discrepancy.
+ *
+ * @param {any} raw
+ * @returns {ExtensionSettings}
+ */
+function sanitizeSettings(raw) {
+  if (!raw || typeof raw !== "object") {
+    return /** @type {ExtensionSettings} */ ({ ...DEFAULTS });
+  }
+  const merged = { ...DEFAULTS, ...raw };
+  const normalizedQuality = merged.quality === "hd2160" ? "highres" : merged.quality;
+  const volumeStepNum = Number(merged.volumeStep);
+  const speedStepNum = Number(merged.speedStep);
+  const boostLevelNum = Number(merged.volumeBoostLevel);
+  return {
+    qualityEnabled: typeof merged.qualityEnabled === "boolean" ? merged.qualityEnabled : Boolean(merged.qualityEnabled),
+    quality:
+      typeof normalizedQuality === "string" && ISO_VALID_QUALITIES.includes(normalizedQuality)
+        ? normalizedQuality
+        : DEFAULTS.quality,
+    sponsorblockEnabled:
+      typeof merged.sponsorblockEnabled === "boolean" ? merged.sponsorblockEnabled : Boolean(merged.sponsorblockEnabled),
+    sponsorblockCategories: Array.isArray(merged.sponsorblockCategories)
+      ? merged.sponsorblockCategories.filter(
+          /** @param {any} c */
+          (c) => typeof c === "string" && c.length > 0
+        )
+      : [...DEFAULTS.sponsorblockCategories],
+    sponsorblockNotify:
+      typeof merged.sponsorblockNotify === "boolean" ? merged.sponsorblockNotify : Boolean(merged.sponsorblockNotify),
+    volumeGestureEnabled:
+      typeof merged.volumeGestureEnabled === "boolean" ? merged.volumeGestureEnabled : Boolean(merged.volumeGestureEnabled),
+    volumeStep:
+      typeof merged.volumeStep === "number" && Number.isFinite(volumeStepNum) && volumeStepNum >= 1 && volumeStepNum <= 10
+        ? Math.round(volumeStepNum)
+        : DEFAULTS.volumeStep,
+    speedControlEnabled:
+      typeof merged.speedControlEnabled === "boolean" ? merged.speedControlEnabled : Boolean(merged.speedControlEnabled),
+    speedStep:
+      typeof merged.speedStep === "number" && Number.isFinite(speedStepNum) && ISO_VALID_SPEED_STEPS.includes(speedStepNum)
+        ? speedStepNum
+        : DEFAULTS.speedStep,
+    volumeBoostEnabled:
+      typeof merged.volumeBoostEnabled === "boolean" ? merged.volumeBoostEnabled : Boolean(merged.volumeBoostEnabled),
+    volumeBoostLevel:
+      Number.isFinite(boostLevelNum) && ISO_VALID_BOOST_LEVELS.includes(boostLevelNum)
+        ? boostLevelNum
+        : DEFAULTS.volumeBoostLevel,
+    miniPlayerEnabled:
+      typeof merged.miniPlayerEnabled === "boolean" ? merged.miniPlayerEnabled : Boolean(merged.miniPlayerEnabled),
+    pipEnabled: typeof merged.pipEnabled === "boolean" ? merged.pipEnabled : Boolean(merged.pipEnabled),
+    pipAutoOnTabSwitch:
+      typeof merged.pipAutoOnTabSwitch === "boolean" ? merged.pipAutoOnTabSwitch : Boolean(merged.pipAutoOnTabSwitch),
+    pauseOtherTabsEnabled:
+      typeof merged.pauseOtherTabsEnabled === "boolean"
+        ? merged.pauseOtherTabsEnabled
+        : Boolean(merged.pauseOtherTabsEnabled),
+  };
+}
 
 // SponsorBlock API base URL (public segment query endpoint)
 /** @type {string} */
 const SB_API_BASE = "https://sponsor.ajay.app/api";
 
-// Cache fetched segments to avoid duplicate API calls when navigating
 // Cache fetched segments to avoid duplicate API calls when navigating
 // back to a previously watched video in the same session.
 // Key format: `${videoId}:${sortedCategories}`
@@ -59,15 +126,24 @@ const SB_API_BASE = "https://sponsor.ajay.app/api";
 const segmentCache = new Map();
 const MAX_CACHE_ENTRIES = 50;
 
+// Deduplicate concurrent in-flight SponsorBlock API requests for the same cache key.
+// Prevents initialize() and REQUEST_SEGMENTS from firing duplicate HTTP fetches on page load.
+/** @type {Map<string, Promise<SponsorBlockSegment[]>>} */
+const inFlightRequests = new Map();
+
 /**
  * Safely caches segments while keeping memory consumption bounded.
+ * Refreshes insertion order when updating an existing key and evicts the oldest
+ * entry only when inserting a new key at capacity.
  *
  * @param {string} key
  * @param {SponsorBlockSegment[]} value
  * @returns {void}
  */
 function setInSegmentCache(key, value) {
-  if (segmentCache.size >= MAX_CACHE_ENTRIES) {
+  if (segmentCache.has(key)) {
+    segmentCache.delete(key);
+  } else if (segmentCache.size >= MAX_CACHE_ENTRIES) {
     const oldestKey = segmentCache.keys().next().value;
     if (oldestKey) segmentCache.delete(oldestKey);
   }
@@ -109,19 +185,28 @@ function isExtensionContextValid() {
   }
 }
 
+// In-memory settings cache to avoid redundant chrome.storage IPC calls on SPA navigations
+/** @type {ExtensionSettings | null} */
+let cachedSettings = null;
+
 /**
- * Loads stored extension settings with layered fallbacks.
+ * Loads stored extension settings with layered fallbacks and in-memory caching.
  * Tries chrome.storage.sync first. If sync is unavailable or throws
  * (for example, when browser synchronization is disabled or when the extension
  * context is invalidated during a live extension reload), it falls back to
  * chrome.storage.local. If local storage is also unavailable, it returns DEFAULTS.
  * Suppresses console output on context invalidation to prevent error badges in Chromium.
  *
+ * @param {boolean} [forceRefresh=false] - Bypass in-memory cache when storage changes
  * @returns {Promise<ExtensionSettings>} Resolved settings object
  */
-async function getSettings() {
+async function getSettings(forceRefresh = false) {
+  if (!forceRefresh && cachedSettings) {
+    return /** @type {ExtensionSettings} */ ({ ...cachedSettings });
+  }
+
   if (!isExtensionContextValid()) {
-    return /** @type {ExtensionSettings} */ ({ ...DEFAULTS });
+    return /** @type {ExtensionSettings} */ ({ ...(cachedSettings || DEFAULTS) });
   }
 
   // Attempt 1: chrome.storage.sync
@@ -129,7 +214,9 @@ async function getSettings() {
     if (typeof chrome !== "undefined" && chrome?.storage?.sync?.get) {
       const syncData = await chrome.storage.sync.get(DEFAULTS);
       if (syncData && typeof syncData === "object") {
-        return /** @type {ExtensionSettings} */ ({ ...DEFAULTS, ...syncData });
+        const sanitized = sanitizeSettings(syncData);
+        cachedSettings = sanitized;
+        return /** @type {ExtensionSettings} */ ({ ...sanitized });
       }
     }
   } catch (syncError) {
@@ -146,7 +233,9 @@ async function getSettings() {
     if (typeof chrome !== "undefined" && chrome?.storage?.local?.get) {
       const localData = await chrome.storage.local.get(DEFAULTS);
       if (localData && typeof localData === "object") {
-        return /** @type {ExtensionSettings} */ ({ ...DEFAULTS, ...localData });
+        const sanitized = sanitizeSettings(localData);
+        cachedSettings = sanitized;
+        return /** @type {ExtensionSettings} */ ({ ...sanitized });
       }
     }
   } catch (localError) {
@@ -159,30 +248,29 @@ async function getSettings() {
   }
 
   // Attempt 3: In-memory fallback defaults
-  return /** @type {ExtensionSettings} */ ({ ...DEFAULTS });
+  const fallback = /** @type {ExtensionSettings} */ ({ ...DEFAULTS });
+  cachedSettings = fallback;
+  return /** @type {ExtensionSettings} */ ({ ...fallback });
 }
 
 // ---------------------------------------------------------------------------
 // Utility: extract video ID from the current URL
 // ---------------------------------------------------------------------------
 /**
- * Extracts the 11-character YouTube video ID from the URL search query.
- * Also parses YouTube Shorts paths (/shorts/VIDEO_ID) if present.
+ * Extracts the 11-character YouTube video ID from the URL search query on /watch pages.
+ * Restricted to standard watch pages to align with content/main.js lifecycle and avoid
+ * unnecessary SponsorBlock API requests on YouTube Shorts.
  *
- * @returns {string | null} The video identifier or null if not on a video page
+ * @returns {string | null} The video identifier or null if not on a watch page
  */
 function getVideoId() {
+  if (window.location.pathname && window.location.pathname !== "/watch" && !window.location.search.includes("v=")) {
+    return null;
+  }
   // Check standard watch query parameter ?v=
   const params = new URLSearchParams(window.location.search);
   const queryId = params.get("v");
   if (queryId) return queryId;
-
-  // Check shorts path: /shorts/VIDEO_ID
-  const pathname = window.location.pathname;
-  if (pathname.startsWith("/shorts/")) {
-    const parts = pathname.split("/");
-    if (parts[2]) return parts[2];
-  }
 
   return null;
 }
@@ -240,95 +328,177 @@ async function fetchSegments(videoId, categories) {
     return segmentCache.get(cacheKey) || [];
   }
 
-  // Set up an AbortController with a 5-second timeout window
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => {
-    controller.abort();
-  }, 5000);
-
-  try {
-    const hashPrefix = await sha256Prefix(videoId);
-
-    // Build the API URL with category and action type filters
-    const categoriesParam = encodeURIComponent(JSON.stringify(categories));
-    const url = `${SB_API_BASE}/skipSegments/${hashPrefix}?categories=${categoriesParam}&actionTypes=${encodeURIComponent('["skip"]')}`;
-
-    const response = await fetch(url, { signal: controller.signal });
-    clearTimeout(timeoutId);
-
-    // 404 indicates no segments exist in the database for videos matching this prefix
-    if (response.status === 404) {
-      setInSegmentCache(cacheKey, []);
-      return [];
-    }
-
-    if (!response.ok) {
-      console.log(`[YT Adjust] SponsorBlock API returned HTTP ${response.status}`);
-      return [];
-    }
-
-    const data = await response.json();
-
-    // Verify response format: the hash-prefix endpoint returns an array of video entries
-    if (!Array.isArray(data)) {
-      console.warn("[YT Adjust] SponsorBlock response payload is not an array:", data);
-      return [];
-    }
-
-    // Filter to find segments matching our exact video ID client-side
-    /** @type {SponsorBlockSegment[]} */
-    let segments = [];
-    for (const entry of data) {
-      if (entry && entry.videoID === videoId && Array.isArray(entry.segments)) {
-        // Validate each segment item defensively before passing to cache or main world
-        segments = entry.segments.filter(
-          /**
-           * Type guard checks segment object structure and finite numeric bounds.
-           *
-           * @param {any} s
-           * @returns {s is SponsorBlockSegment}
-           */
-          (s) =>
-            Boolean(s) &&
-            typeof s === "object" &&
-            Array.isArray(s.segment) &&
-            s.segment.length >= 2 &&
-            typeof s.segment[0] === "number" &&
-            typeof s.segment[1] === "number" &&
-            Number.isFinite(s.segment[0]) &&
-            Number.isFinite(s.segment[1]) &&
-            s.segment[0] >= 0 &&
-            s.segment[1] > s.segment[0]
-        );
-        break;
-      }
-    }
-
-    // Defensive sort: verify start timestamps exist before comparing
-    segments.sort((a, b) => {
-      const startA = Array.isArray(a?.segment) && typeof a.segment[0] === "number" ? a.segment[0] : 0;
-      const startB = Array.isArray(b?.segment) && typeof b.segment[0] === "number" ? b.segment[0] : 0;
-      return startA - startB;
-    });
-
-    // Cache the validated result
-    setInSegmentCache(cacheKey, segments);
-
-    if (segments.length > 0) {
-      console.log(`[YT Adjust] Found ${segments.length} SponsorBlock segment(s) for ${videoId}`);
-    }
-
-    return segments;
-  } catch (err) {
-    clearTimeout(timeoutId);
-    // Suppress verbose error logging on deliberate aborts
-    if (err instanceof Error && err.name === "AbortError") {
-      console.warn(`[YT Adjust] SponsorBlock request timed out for video ${videoId}`);
-    } else {
-      console.error("[YT Adjust] Failed to fetch SponsorBlock segments:", err);
-    }
-    return [];
+  // Reuse in-flight request Promise if an identical query is already awaiting network I/O
+  const existingRequest = inFlightRequests.get(cacheKey);
+  if (existingRequest) {
+    return existingRequest;
   }
+
+  const requestPromise = (async () => {
+    // Set up an AbortController with a 5-second timeout window
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => {
+      controller.abort();
+    }, 5000);
+
+    try {
+      const hashPrefix = await sha256Prefix(videoId);
+
+      // Build the API URL with category, action type, and UUID trimming filters
+      const categoriesParam = encodeURIComponent(JSON.stringify(categories));
+      const url = `${SB_API_BASE}/skipSegments/${hashPrefix}?categories=${categoriesParam}&actionTypes=${encodeURIComponent('["skip"]')}&trimUUIDs=5`;
+
+      /** @type {any} */
+      let data = null;
+
+      // In Manifest V3, content scripts execute inside the host page frame
+      // (https://www.youtube.com) and cannot issue cross-origin fetch() calls
+      // directly without triggering a frame-origin security error. Route the
+      // request through the extension's background service worker via
+      // chrome.runtime.sendMessage whenever available.
+      if (
+        typeof chrome !== "undefined" &&
+        chrome.runtime &&
+        typeof chrome.runtime.sendMessage === "function"
+      ) {
+        clearTimeout(timeoutId);
+        /** @type {any} */
+        let msgTimeoutId = null;
+        const msgTimeoutPromise = new Promise((resolve) => {
+          msgTimeoutId = setTimeout(() => {
+            resolve({ ok: false, status: 0, error: "AbortError" });
+          }, 5500);
+        });
+
+        const bgResponse = await Promise.race([
+          chrome.runtime.sendMessage({
+            type: "FETCH_SPONSORBLOCK",
+            url,
+          }),
+          msgTimeoutPromise,
+        ]);
+        if (msgTimeoutId) clearTimeout(msgTimeoutId);
+
+        if (!bgResponse || typeof bgResponse !== "object") {
+          return [];
+        }
+
+        if (bgResponse.error === "AbortError") {
+          console.warn(`[YT Adjust] SponsorBlock request timed out for video ${videoId}`);
+          return [];
+        }
+
+        if (bgResponse.status === 404) {
+          setInSegmentCache(cacheKey, []);
+          return [];
+        }
+
+        if (!bgResponse.ok) {
+          console.log(
+            `[YT Adjust] SponsorBlock API returned status ${bgResponse.status || bgResponse.error || "error"}`
+          );
+          return [];
+        }
+
+        data = bgResponse.data;
+      } else {
+        // Fallback for standalone VM unit test sandboxes that mock global fetch() directly
+        const response = await fetch(url, { signal: controller.signal });
+        clearTimeout(timeoutId);
+
+        // 404 indicates no segments exist in the database for videos matching this prefix
+        if (response.status === 404) {
+          setInSegmentCache(cacheKey, []);
+          return [];
+        }
+
+        if (!response.ok) {
+          console.log(`[YT Adjust] SponsorBlock API returned HTTP ${response.status}`);
+          return [];
+        }
+
+        data = await response.json();
+      }
+
+      // Verify response format: the hash-prefix endpoint returns an array of video entries
+      if (!Array.isArray(data)) {
+        console.warn("[YT Adjust] SponsorBlock response payload is not an array:", data);
+        return [];
+      }
+
+      // Filter to find segments matching our exact video ID client-side
+      /** @type {SponsorBlockSegment[]} */
+      let segments = [];
+      for (const entry of data) {
+        if (entry && entry.videoID === videoId && Array.isArray(entry.segments)) {
+          // Validate each segment item defensively before passing to cache or main world
+          segments = entry.segments
+            .filter(
+              /**
+               * Type guard checks segment object structure and finite numeric bounds.
+               *
+               * @param {any} s
+               * @returns {s is SponsorBlockSegment}
+               */
+              (s) =>
+                Boolean(s) &&
+                typeof s === "object" &&
+                Array.isArray(s.segment) &&
+                s.segment.length >= 2 &&
+                typeof s.segment[0] === "number" &&
+                typeof s.segment[1] === "number" &&
+                Number.isFinite(s.segment[0]) &&
+                Number.isFinite(s.segment[1]) &&
+                s.segment[0] >= 0 &&
+                s.segment[1] > s.segment[0]
+            )
+            .map(
+              /** @param {SponsorBlockSegment} s */
+              (s) => ({
+                ...s,
+                category: typeof s.category === "string" && s.category ? s.category : "sponsor",
+                UUID: typeof s.UUID === "string" && s.UUID ? s.UUID : `${s.segment[0]}-${s.segment[1]}`,
+              })
+            );
+          break;
+        }
+      }
+
+      // Defensive sort: verify start timestamps exist before comparing
+      segments.sort((a, b) => {
+        const startA = Array.isArray(a?.segment) && typeof a.segment[0] === "number" ? a.segment[0] : 0;
+        const startB = Array.isArray(b?.segment) && typeof b.segment[0] === "number" ? b.segment[0] : 0;
+        return startA - startB;
+      });
+
+      // Cache the validated result
+      setInSegmentCache(cacheKey, segments);
+
+      if (segments.length > 0) {
+        console.log(`[YT Adjust] Found ${segments.length} SponsorBlock segment(s) for ${videoId}`);
+      }
+
+      return segments;
+    } catch (err) {
+      clearTimeout(timeoutId);
+      // Use console.warn instead of console.error so transient network failures
+      // do not register runtime error badges on chrome://extensions
+      if (err instanceof Error && err.message && err.message.includes("Extension context invalidated")) {
+        return [];
+      }
+      if (err instanceof Error && err.name === "AbortError") {
+        console.warn(`[YT Adjust] SponsorBlock request timed out for video ${videoId}`);
+      } else {
+        console.warn("[YT Adjust] Failed to fetch SponsorBlock segments:", err);
+      }
+      return [];
+    } finally {
+      inFlightRequests.delete(cacheKey);
+    }
+  })();
+
+  inFlightRequests.set(cacheKey, requestPromise);
+  return requestPromise;
 }
 
 // ---------------------------------------------------------------------------
@@ -378,22 +548,24 @@ async function initialize() {
 
   const videoId = getVideoId();
 
-  // Only execute logic when on a valid video watch or shorts page
-  if (!videoId) return;
-
   // Skip duplicate runs if already initialized for this exact video identifier
-  if (videoId === currentVideoId) return;
+  if (videoId && videoId === currentVideoId) return;
   currentVideoId = videoId;
 
-  // Load user settings through our guarded fallback helper
+  // Load user settings through our guarded fallback helper and transmit to main.js
+  // even when landing on a non-watch page so main.js always has current settings
   const settings = await getSettings();
-
-  // Transmit settings to main.js so the main world stays synchronized
   sendToMain("SETTINGS_UPDATE", settings);
+
+  // Only fetch SponsorBlock segments when on a valid video watch page
+  if (!videoId) return;
 
   // Fetch segments if SponsorBlock is enabled and at least one category is selected
   if (settings.sponsorblockEnabled && Array.isArray(settings.sponsorblockCategories) && settings.sponsorblockCategories.length > 0) {
     const segments = await fetchSegments(videoId, settings.sponsorblockCategories);
+    // Guard against cross-video navigation race while network fetch was in flight
+    const activeId = getVideoId();
+    if (activeId && activeId !== videoId) return;
     sendToMain("SEGMENTS_UPDATE", {
       videoId: videoId,
       segments: segments,
@@ -444,8 +616,23 @@ if (typeof chrome !== "undefined" && chrome?.storage?.onChanged) {
     if (!isExtensionContextValid()) return;
     if (areaName !== "sync" && areaName !== "local") return;
 
-    // Load full settings object to ensure consistency
-    const settings = await getSettings();
+    // Cross-tab pause signal via chrome.storage.local (works even without service worker relay)
+    if (changes && changes.ytAdjustActivePlaySignal && changes.ytAdjustActivePlaySignal.newValue) {
+      const signal = changes.ytAdjustActivePlaySignal.newValue;
+      if (signal && typeof signal === "object" && typeof signal.tabId === "string") {
+        sendToMain("PAUSE_FROM_OTHER_TAB", {
+          tabId: signal.tabId,
+          timestamp: typeof signal.timestamp === "number" ? signal.timestamp : Date.now(),
+        });
+      }
+      const changedKeys = Object.keys(changes);
+      if (changedKeys.length === 1 && changedKeys[0] === "ytAdjustActivePlaySignal") {
+        return;
+      }
+    }
+
+    // Load full settings object (bypassing cache) to ensure consistency
+    const settings = await getSettings(true);
     sendToMain("SETTINGS_UPDATE", settings);
 
     // If SponsorBlock settings changed, re-query segments for the active video
@@ -459,6 +646,8 @@ if (typeof chrome !== "undefined" && chrome?.storage?.onChanged) {
           }
         }
         const segments = await fetchSegments(videoId, settings.sponsorblockCategories);
+        const activeId = getVideoId();
+        if (activeId && activeId !== videoId) return;
         sendToMain("SEGMENTS_UPDATE", {
           videoId: videoId,
           segments: segments,
@@ -505,6 +694,8 @@ window.addEventListener("message", async (event) => {
       const settings = await getSettings();
       if (settings.sponsorblockEnabled && Array.isArray(settings.sponsorblockCategories) && settings.sponsorblockCategories.length > 0) {
         const segments = await fetchSegments(videoId, settings.sponsorblockCategories);
+        const activeId = getVideoId();
+        if (activeId && activeId !== videoId) return;
         sendToMain("SEGMENTS_UPDATE", {
           videoId: videoId,
           segments: segments,
@@ -517,6 +708,48 @@ window.addEventListener("message", async (event) => {
       }
     }
   }
+
+  if (type === "TAB_PLAYBACK_STARTED") {
+    const safePayload = payload && typeof payload === "object" ? payload : {};
+    const tabId = typeof safePayload.tabId === "string" ? safePayload.tabId : "";
+    const timestamp = typeof safePayload.timestamp === "number" ? safePayload.timestamp : Date.now();
+    if (isExtensionContextValid() && typeof chrome !== "undefined") {
+      if (chrome?.storage?.local?.set) {
+        try {
+          const p = chrome.storage.local.set({
+            ytAdjustActivePlaySignal: { tabId, timestamp },
+          });
+          if (p && typeof p.catch === "function") {
+            p.catch(() => {});
+          }
+        } catch (e) {}
+      }
+      if (chrome.runtime && typeof chrome.runtime.sendMessage === "function") {
+        try {
+          const res = chrome.runtime.sendMessage({
+            type: "PAUSE_OTHER_TABS",
+            tabId,
+          });
+          if (res && typeof res.catch === "function") {
+            res.catch(() => {});
+          }
+        } catch (e) {}
+      }
+    }
+  }
 });
 
-console.log("[YT Adjust] Isolated world script loaded");
+// Listen for cross-tab pause commands relayed by the background service worker
+if (typeof chrome !== "undefined" && chrome?.runtime?.onMessage) {
+  chrome.runtime.onMessage.addListener((message) => {
+    if (!isExtensionContextValid()) return false;
+    if (message && typeof message === "object" && message.type === "PAUSE_TAB_VIDEO") {
+      sendToMain("PAUSE_FROM_OTHER_TAB", {
+        tabId: typeof message.tabId === "string" ? message.tabId : "",
+      });
+    }
+    return false;
+  });
+}
+
+console.log("[YT Adjust] Isolated world script loaded (v2.4.2)");

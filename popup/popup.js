@@ -1,5 +1,5 @@
 /**
- * YT Adjust — Popup Settings Management (v2.3.8)
+ * YT Adjust — Popup Settings Management (v2.4.2)
  * ===============================================
  * Handles loading, updating, and persisting extension settings to chrome.storage.sync.
  * Every user interaction is saved instantly without requiring a manual save button.
@@ -21,7 +21,6 @@
  * @typedef {Object} PopupElements
  * @property {HTMLInputElement | null} qualityEnabled - Checkbox for auto quality enforcement
  * @property {HTMLSelectElement | null} qualitySelect - Dropdown for preferred resolution
- * @property {HTMLElement | null} qualitySelectorRow - Container row for quality dropdown
  * @property {HTMLInputElement | null} sponsorblockEnabled - Checkbox for SponsorBlock skipping
  * @property {HTMLElement | null} sponsorblockSettings - Sub-settings container for SponsorBlock
  * @property {HTMLInputElement | null} sponsorblockNotify - Checkbox for skip toast notifications
@@ -30,14 +29,16 @@
  * @property {HTMLElement | null} volumeSettings - Container row for volume slider
  * @property {HTMLInputElement | null} volumeStep - Range input for volume adjustment step size
  * @property {HTMLElement | null} volumeStepValue - Text label displaying current volume percentage
- * @property {HTMLInputElement | null} speedControlEnabled - Checkbox for Ctrl + scroll speed control
+ * @property {HTMLInputElement | null} speedControlEnabled - Checkbox for Shift + scroll speed control
  * @property {HTMLSelectElement | null} speedStep - Dropdown for speed adjustment step rate
- * @property {HTMLElement | null} speedSelectorRow - Container row for speed step dropdown
  * @property {HTMLInputElement | null} volumeBoostEnabled - Checkbox for Web Audio volume boost button
+ * @property {HTMLSelectElement | null} volumeBoostLevel - Dropdown for volume boost amplification level (150%, 200%, 300%)
  * @property {HTMLInputElement | null} miniPlayerEnabled - Checkbox for scroll-to-mini-player
  * @property {HTMLInputElement | null} pipEnabled - Checkbox for Picture-in-Picture feature
  * @property {HTMLInputElement | null} pipAutoOnTabSwitch - Checkbox for auto-PiP on tab switch
  * @property {HTMLElement | null} pipSettings - Container for Picture-in-Picture sub-settings
+ * @property {HTMLInputElement | null} [pauseOtherTabsEnabled] - Checkbox for pausing other YouTube tabs when playing
+ * @property {HTMLButtonElement | null} [resetDefaultsBtn] - Button to restore all settings to defaults
  */
 
 // Default configuration matching content/isolated.js and content/main.js
@@ -53,17 +54,22 @@ const DEFAULT_SETTINGS = {
   speedControlEnabled: true,
   speedStep: 0.25,
   volumeBoostEnabled: true,
+  volumeBoostLevel: 1.5,
   miniPlayerEnabled: true,
   pipEnabled: true,
   pipAutoOnTabSwitch: true,
+  pauseOtherTabsEnabled: false,
 };
+
+const VALID_QUALITIES = ["highres", "hd1440", "hd1080", "hd720", "large", "auto"];
+const VALID_SPEED_STEPS = [0.1, 0.25, 0.5];
+const VALID_BOOST_LEVELS = [1.5, 2, 3];
 
 // Cached DOM element references
 /** @type {PopupElements} */
 let els = {
   qualityEnabled: null,
   qualitySelect: null,
-  qualitySelectorRow: null,
   sponsorblockEnabled: null,
   sponsorblockSettings: null,
   sponsorblockNotify: null,
@@ -74,12 +80,14 @@ let els = {
   volumeStepValue: null,
   speedControlEnabled: null,
   speedStep: null,
-  speedSelectorRow: null,
   volumeBoostEnabled: null,
+  volumeBoostLevel: null,
   miniPlayerEnabled: null,
   pipEnabled: null,
   pipAutoOnTabSwitch: null,
   pipSettings: null,
+  pauseOtherTabsEnabled: null,
+  resetDefaultsBtn: null,
 };
 
 /**
@@ -93,7 +101,6 @@ function cacheElements() {
     // 1. Auto Quality
     qualityEnabled: /** @type {HTMLInputElement | null} */ (document.getElementById("qualityEnabled")),
     qualitySelect: /** @type {HTMLSelectElement | null} */ (document.getElementById("qualitySelect")),
-    qualitySelectorRow: document.getElementById("qualitySelectorRow"),
 
     // 2. SponsorBlock
     sponsorblockEnabled: /** @type {HTMLInputElement | null} */ (document.getElementById("sponsorblockEnabled")),
@@ -110,10 +117,10 @@ function cacheElements() {
     // 4. Speed Control
     speedControlEnabled: /** @type {HTMLInputElement | null} */ (document.getElementById("speedControlEnabled")),
     speedStep: /** @type {HTMLSelectElement | null} */ (document.getElementById("speedStep")),
-    speedSelectorRow: document.getElementById("speedSelectorRow"),
 
     // 5. Volume Boost
     volumeBoostEnabled: /** @type {HTMLInputElement | null} */ (document.getElementById("volumeBoostEnabled")),
+    volumeBoostLevel: /** @type {HTMLSelectElement | null} */ (document.getElementById("volumeBoostLevel")),
 
     // 6. Mini Player
     miniPlayerEnabled: /** @type {HTMLInputElement | null} */ (document.getElementById("miniPlayerEnabled")),
@@ -122,6 +129,12 @@ function cacheElements() {
     pipEnabled: /** @type {HTMLInputElement | null} */ (document.getElementById("pipEnabled")),
     pipAutoOnTabSwitch: /** @type {HTMLInputElement | null} */ (document.getElementById("pipAutoOnTabSwitch")),
     pipSettings: document.getElementById("pipSettings"),
+
+    // 8. Pause Other Tabs
+    pauseOtherTabsEnabled: /** @type {HTMLInputElement | null} */ (document.getElementById("pauseOtherTabsEnabled")),
+
+    // 9. Reset Defaults Button
+    resetDefaultsBtn: /** @type {HTMLButtonElement | null} */ (document.getElementById("resetDefaultsBtn")),
   };
 }
 
@@ -151,7 +164,10 @@ function initPopup() {
     if (typeof localStorage !== "undefined") {
       const cached = localStorage.getItem("yt_adjust_popup_settings");
       if (cached) {
-        applySettings(/** @type {ExtensionSettings} */ (JSON.parse(cached)));
+        const parsed = JSON.parse(cached);
+        if (parsed && typeof parsed === "object") {
+          applySettings(/** @type {ExtensionSettings} */ (parsed));
+        }
       }
     }
   } catch (e) {
@@ -163,15 +179,24 @@ function initPopup() {
 
 /**
  * Populates popup UI inputs and visibility from a settings object.
+ * Validates numeric ranges and allowed option values so corrupted storage entries
+ * gracefully fall back to DEFAULT_SETTINGS.
  *
  * @param {ExtensionSettings} settings - Settings object to apply to DOM
  * @returns {void}
  */
 function applySettings(settings) {
+  if (!settings || typeof settings !== "object") return;
+
   // 1. Quality Settings
   if (els.qualityEnabled) els.qualityEnabled.checked = Boolean(settings.qualityEnabled);
-  if (els.qualitySelect && typeof settings.quality === "string") {
-    els.qualitySelect.value = settings.quality;
+  const normalizedQuality = settings.quality === "hd2160" ? "highres" : settings.quality;
+  const validQuality =
+    typeof normalizedQuality === "string" && VALID_QUALITIES.includes(normalizedQuality)
+      ? normalizedQuality
+      : DEFAULT_SETTINGS.quality;
+  if (els.qualitySelect) {
+    els.qualitySelect.value = validQuality;
   }
   toggleVisibility(els.qualitySelect, Boolean(settings.qualityEnabled));
 
@@ -193,19 +218,38 @@ function applySettings(settings) {
 
   // 3. Volume Gesture Settings
   if (els.volumeGestureEnabled) els.volumeGestureEnabled.checked = Boolean(settings.volumeGestureEnabled);
-  const volumeStepNum = typeof settings.volumeStep === "number" ? settings.volumeStep : 5;
+  const volumeStepNum =
+    typeof settings.volumeStep === "number" &&
+    Number.isFinite(settings.volumeStep) &&
+    settings.volumeStep >= 1 &&
+    settings.volumeStep <= 10
+      ? Math.round(settings.volumeStep)
+      : DEFAULT_SETTINGS.volumeStep;
   if (els.volumeStep) els.volumeStep.value = String(volumeStepNum);
   if (els.volumeStepValue) els.volumeStepValue.textContent = `${volumeStepNum}%`;
   toggleVisibility(els.volumeSettings, Boolean(settings.volumeGestureEnabled));
 
   // 4. Speed Control Settings
   if (els.speedControlEnabled) els.speedControlEnabled.checked = Boolean(settings.speedControlEnabled);
-  const speedStepNum = typeof settings.speedStep === "number" ? settings.speedStep : 0.25;
+  const speedStepNum =
+    typeof settings.speedStep === "number" &&
+    Number.isFinite(settings.speedStep) &&
+    VALID_SPEED_STEPS.includes(settings.speedStep)
+      ? settings.speedStep
+      : DEFAULT_SETTINGS.speedStep;
   if (els.speedStep) els.speedStep.value = String(speedStepNum);
   toggleVisibility(els.speedStep, Boolean(settings.speedControlEnabled));
 
   // 5. Volume Boost Settings
   if (els.volumeBoostEnabled) els.volumeBoostEnabled.checked = Boolean(settings.volumeBoostEnabled);
+  const boostLevelNum =
+    typeof settings.volumeBoostLevel === "number" &&
+    Number.isFinite(settings.volumeBoostLevel) &&
+    VALID_BOOST_LEVELS.includes(settings.volumeBoostLevel)
+      ? settings.volumeBoostLevel
+      : DEFAULT_SETTINGS.volumeBoostLevel;
+  if (els.volumeBoostLevel) els.volumeBoostLevel.value = String(boostLevelNum);
+  toggleVisibility(els.volumeBoostLevel, Boolean(settings.volumeBoostEnabled));
 
   // 6. Mini Player Settings
   if (els.miniPlayerEnabled) els.miniPlayerEnabled.checked = Boolean(settings.miniPlayerEnabled);
@@ -214,26 +258,19 @@ function applySettings(settings) {
   if (els.pipEnabled) els.pipEnabled.checked = Boolean(settings.pipEnabled);
   if (els.pipAutoOnTabSwitch) els.pipAutoOnTabSwitch.checked = Boolean(settings.pipAutoOnTabSwitch);
   toggleVisibility(els.pipSettings, Boolean(settings.pipEnabled));
+
+  // 8. Pause Other Tabs Settings
+  if (els.pauseOtherTabsEnabled) els.pauseOtherTabsEnabled.checked = Boolean(settings.pauseOtherTabsEnabled);
 }
 
 /**
- * Loads saved settings from chrome.storage.sync and populates the UI controls.
- * Applies defensive checks for runtime errors and corrupt settings data.
+ * Loads saved settings from chrome.storage.sync (with fallback to chrome.storage.local)
+ * and populates the UI controls. Applies defensive checks for runtime errors and corrupt data.
  *
  * @returns {void}
  */
 function loadSettings() {
-  if (typeof chrome === "undefined" || !chrome?.storage?.sync?.get) {
-    console.warn("[YT Adjust Popup] chrome.storage.sync is unavailable");
-    return;
-  }
-
-  chrome.storage.sync.get(DEFAULT_SETTINGS, (stored) => {
-    if (chrome.runtime && chrome.runtime.lastError) {
-      console.error("[YT Adjust Popup] Error loading settings:", chrome.runtime.lastError.message);
-      return;
-    }
-
+  const applyStored = (/** @type {any} */ stored) => {
     const settings = /** @type {ExtensionSettings} */ ({
       ...DEFAULT_SETTINGS,
       ...(stored && typeof stored === "object" ? stored : {}),
@@ -246,7 +283,43 @@ function loadSettings() {
         localStorage.setItem("yt_adjust_popup_settings", JSON.stringify(settings));
       }
     } catch (e) {}
-  });
+  };
+
+  const tryLocalFallback = () => {
+    if (typeof chrome !== "undefined" && chrome?.storage?.local?.get) {
+      try {
+        chrome.storage.local.get(DEFAULT_SETTINGS, (localStored) => {
+          if (chrome.runtime && chrome.runtime.lastError) {
+            console.warn("[YT Adjust Popup] Local storage load fallback warning:", chrome.runtime.lastError.message);
+            return;
+          }
+          applyStored(localStored);
+        });
+      } catch (localErr) {
+        console.warn("[YT Adjust Popup] Exception reading chrome.storage.local:", localErr);
+      }
+    }
+  };
+
+  if (typeof chrome === "undefined" || !chrome?.storage?.sync?.get) {
+    console.warn("[YT Adjust Popup] chrome.storage.sync is unavailable");
+    tryLocalFallback();
+    return;
+  }
+
+  try {
+    chrome.storage.sync.get(DEFAULT_SETTINGS, (stored) => {
+      if (chrome.runtime && chrome.runtime.lastError) {
+        console.warn("[YT Adjust Popup] Error loading sync settings, trying local:", chrome.runtime.lastError.message);
+        tryLocalFallback();
+        return;
+      }
+      applyStored(stored);
+    });
+  } catch (syncErr) {
+    console.warn("[YT Adjust Popup] Exception reading chrome.storage.sync:", syncErr);
+    tryLocalFallback();
+  }
 }
 
 /**
@@ -355,12 +428,23 @@ function attachListeners() {
   }
 
   // -------------------------------------------------------------------------
-  // 5. Volume Boost Listener
+  // 5. Volume Boost Listeners
   // -------------------------------------------------------------------------
   if (els.volumeBoostEnabled) {
     els.volumeBoostEnabled.addEventListener("change", (e) => {
       const target = /** @type {HTMLInputElement} */ (e.target);
       saveSetting("volumeBoostEnabled", target.checked);
+      toggleVisibility(els.volumeBoostLevel, target.checked);
+    });
+  }
+
+  if (els.volumeBoostLevel) {
+    els.volumeBoostLevel.addEventListener("change", (e) => {
+      const target = /** @type {HTMLSelectElement} */ (e.target);
+      const parsed = parseFloat(target.value);
+      if (Number.isFinite(parsed) && VALID_BOOST_LEVELS.includes(parsed)) {
+        saveSetting("volumeBoostLevel", parsed);
+      }
     });
   }
 
@@ -391,6 +475,65 @@ function attachListeners() {
       saveSetting("pipAutoOnTabSwitch", target.checked);
     });
   }
+
+  // -------------------------------------------------------------------------
+  // 8. Pause Other Tabs Listener
+  // -------------------------------------------------------------------------
+  if (els.pauseOtherTabsEnabled) {
+    els.pauseOtherTabsEnabled.addEventListener("change", (e) => {
+      const target = /** @type {HTMLInputElement} */ (e.target);
+      saveSetting("pauseOtherTabsEnabled", target.checked);
+    });
+  }
+
+  // -------------------------------------------------------------------------
+  // 9. Reset Defaults Listener
+  // -------------------------------------------------------------------------
+  if (els.resetDefaultsBtn) {
+    els.resetDefaultsBtn.addEventListener("click", () => {
+      resetDefaults();
+    });
+  }
+}
+
+/**
+ * Restores all extension settings to DEFAULT_SETTINGS across the popup UI,
+ * localStorage cache, chrome.storage.sync, and chrome.storage.local.
+ *
+ * @returns {void}
+ */
+function resetDefaults() {
+  const defaultsCopy = /** @type {ExtensionSettings} */ ({
+    ...DEFAULT_SETTINGS,
+    sponsorblockCategories: [...DEFAULT_SETTINGS.sponsorblockCategories],
+  });
+  applySettings(defaultsCopy);
+
+  try {
+    if (typeof localStorage !== "undefined") {
+      localStorage.setItem("yt_adjust_popup_settings", JSON.stringify(defaultsCopy));
+    }
+  } catch (e) {}
+
+  if (typeof chrome !== "undefined" && chrome?.storage?.local?.set) {
+    try {
+      chrome.storage.local.set(defaultsCopy, () => {
+        if (chrome.runtime && chrome.runtime.lastError) {
+          console.warn("[YT Adjust Popup] Local storage reset warning:", chrome.runtime.lastError.message);
+        }
+      });
+    } catch (e) {}
+  }
+
+  if (typeof chrome !== "undefined" && chrome?.storage?.sync?.set) {
+    try {
+      chrome.storage.sync.set(defaultsCopy, () => {
+        if (chrome.runtime && chrome.runtime.lastError) {
+          console.warn("[YT Adjust Popup] Sync storage reset warning:", chrome.runtime.lastError.message);
+        }
+      });
+    } catch (e) {}
+  }
 }
 
 /**
@@ -403,6 +546,23 @@ function attachListeners() {
  * @returns {void}
  */
 function saveSetting(key, value) {
+  const tryLocalSet = () => {
+    if (typeof chrome !== "undefined" && chrome?.storage?.local?.set) {
+      try {
+        chrome.storage.local.set({ [key]: value }, () => {
+          if (chrome.runtime && chrome.runtime.lastError) {
+            console.warn(`[YT Adjust Popup] Failed to save setting "${key}" to local storage:`, chrome.runtime.lastError.message);
+          }
+        });
+      } catch (localErr) {
+        console.warn(`[YT Adjust Popup] Exception saving setting "${key}" to local storage:`, localErr);
+      }
+    }
+  };
+
+  // Always mirror to chrome.storage.local when available for Chrome and Helium parity
+  tryLocalSet();
+
   if (typeof chrome === "undefined" || !chrome?.storage?.sync?.set) {
     console.warn("[YT Adjust Popup] Cannot save setting: chrome.storage.sync is unavailable");
     return;
@@ -411,11 +571,11 @@ function saveSetting(key, value) {
   try {
     chrome.storage.sync.set({ [key]: value }, () => {
       if (chrome.runtime && chrome.runtime.lastError) {
-        console.error(`[YT Adjust Popup] Failed to save setting "${key}":`, chrome.runtime.lastError.message);
+        console.warn(`[YT Adjust Popup] Failed to save setting "${key}" to sync:`, chrome.runtime.lastError.message);
       }
     });
   } catch (saveError) {
-    console.error(`[YT Adjust Popup] Exception while saving setting "${key}":`, saveError);
+    console.warn(`[YT Adjust Popup] Exception while saving setting "${key}":`, saveError);
   }
 
   // Update synchronous cache immediately for instant subsequent opens
@@ -423,14 +583,17 @@ function saveSetting(key, value) {
     if (typeof localStorage !== "undefined") {
       const raw = localStorage.getItem("yt_adjust_popup_settings");
       const current = raw ? JSON.parse(raw) : { ...DEFAULT_SETTINGS };
-      current[key] = value;
-      localStorage.setItem("yt_adjust_popup_settings", JSON.stringify(current));
+      if (current && typeof current === "object") {
+        current[key] = value;
+        localStorage.setItem("yt_adjust_popup_settings", JSON.stringify(current));
+      }
     }
   } catch (e) {}
 }
 
 /**
- * Adjusts container opacity and pointer-events to visually enable or disable child settings.
+ * Adjusts container opacity, pointer-events, and inert state to visually and
+ * programmatically enable or disable child settings for pointer, keyboard, and screen readers.
  * Includes a null check to prevent exceptions if an element reference is missing.
  *
  * @param {HTMLElement | null} element - The container element to adjust
@@ -441,6 +604,10 @@ function toggleVisibility(element, isVisible) {
   if (!element) return;
   element.style.opacity = isVisible ? "1" : "0.5";
   element.style.pointerEvents = isVisible ? "auto" : "none";
+  element.inert = !isVisible;
+  if (typeof element.setAttribute === "function") {
+    element.setAttribute("aria-disabled", String(!isVisible));
+  }
 }
 
 // ---------------------------------------------------------------------------
