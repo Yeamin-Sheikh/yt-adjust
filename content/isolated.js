@@ -1,5 +1,5 @@
 // =============================================================================
-// YT Adjust — Isolated World Content Script (v2.4.2)
+// YT Adjust — Isolated World Content Script (v2.4.3)
 // =============================================================================
 // This script runs in Chrome's ISOLATED execution world.
 // In Manifest V3, an isolated world content script shares the DOM with the web
@@ -799,4 +799,4 @@ if (typeof chrome !== "undefined" && chrome?.runtime?.onMessage) {
   });
 }
 
-console.log("[YT Adjust] Isolated world script loaded (v2.4.2)");
+console.log("[YT Adjust] Isolated world script loaded (v2.4.3)");

@@ -1,5 +1,5 @@
 /**
- * YT Adjust — Popup Settings Management (v2.4.2)
+ * YT Adjust — Popup Settings Management (v2.4.3)
  * ===============================================
  * Handles loading, updating, and persisting extension settings to chrome.storage.sync.
  * Every user interaction is saved instantly without requiring a manual save button.

@@ -10,7 +10,7 @@
 
 - **Phase:** Active development and hardening
 - **Progress:** 41/41 tasks complete (100%)
-- **Active task:** v2.4.2 silent `setPlaybackQualityRange` API quality control, `.ytp-speedmaster-overlay` 2x hold compatibility, mini-player timestamp link interception, SponsorBlock contiguous segment chaining & `< 0.5s` backward-seek fix, and `&trimUUIDs=5` query optimization complete
+- **Active task:** v2.4.3 runtime optimizations (instant `onStateChange` quality lock, `yt-navigate-start` SponsorBlock prefetching, superset category cache filtering, DOM reference caching, and compositor-thread seekbar marker hover) complete
 - **Blockers:** None
 
 ---
